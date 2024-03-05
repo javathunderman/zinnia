@@ -1,0 +1,64 @@
+cabal-version:      2.4
+name:               state-hw
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+synopsis: no
+
+-- The license under which the package is released.
+author:             Yusuf Bham
+maintainer:         ybham6@gmail.com
+
+license:            MPL-2.0
+
+library
+    hs-source-dirs:     src
+
+    exposed-modules:    State, ErrState
+
+    build-depends:      base ^>=4.14.3.0
+                      , containers >= 0.6.5.1
+                      , mtl
+                      -- , megaparsec >= 9.0.0
+                      -- , pretty-simple >= 4.0.0.0
+                      -- , optparse-applicative
+                      -- , text
+                      -- , prettyprinter
+                      -- , prettyprinter-ansi-terminal
+                      -- , parser-combinators
+                      -- , string-conversions
+                      -- , bytestring
+                      -- , directory
+                      -- , process
+                      -- , llvm-hs-pure
+                      -- , llvm-hs-pretty >= 0.9.0.0
+
+    ghc-options:        -Wall
+                        -Wno-unused-matches
+                        -Wincomplete-patterns
+
+    default-language:   Haskell2010
+
+    default-extensions: ScopedTypeVariables
+                      , MultiParamTypeClasses
+                      , TypeFamilies
+                      , TypeApplications
+                      , InstanceSigs
+                      , KindSignatures
+                      , LambdaCase
+                      , TupleSections
+                      , MultiWayIf
+                      , DeriveFoldable
+                      , DeriveFunctor
+                      , DeriveTraversable
+                      , GeneralizedNewtypeDeriving
+
+-- executable runic
+--     main-is:            Main.hs
+-- 
+--     hs-source-dirs:     app
+--     default-language:   Haskell2010
+-- 
+--     build-depends:      base ^>= 4.14.3.0
+--                       , runic
+
