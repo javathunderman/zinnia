@@ -15,6 +15,9 @@ all: $(BIN)
 test-chisel: $(BIN)
 	vvp $(BIN)
 
+test-calyx:
+	fud exec $(COUNTER_MODULE).futil --to dat --through icarus-verilog -s verilog.data data.json
+
 $(CHISEL_VERILOG):
 	scala-cli $(CHISEL_SRC) > $(CHISEL_VERILOG)
 
