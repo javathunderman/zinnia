@@ -6,8 +6,23 @@ component main(@go go: 1) -> (@done done: 1) {
     @external mem = comb_mem_d1(4, 1, 1);
     val = std_reg(4);
     add = std_add(4);
-    }
+    counter = std_reg(4);
+    add2 = std_add(4);
+    lt = std_lt(4);
+  }
   wires {
+    group init {
+      counter.in = 4'd0;
+      counter.write_en = 1'b1;
+      init[done] = counter.done;
+    }
+    group incr {
+      add2.left = counter.out;
+      add2.right = 4'd1;
+      counter.in = add2.out;
+      counter.write_en = 1'b1;
+      incr[done] = counter.done;
+    }
     group write {
       mem.addr0 = 1'b0;
       mem.write_en = 1'b1;
@@ -22,17 +37,29 @@ component main(@go go: 1) -> (@done done: 1) {
     }
     group upd {
       add.left = val.out;
-      add.right = 4'd6;
+      add.right = 4'd2;
       val.in = add.out;
       val.write_en = 1'b1;
       upd[done] = val.done;
     }
+    comb group cond {
+      lt.left = counter.out;
+      lt.right = 4'd7; // We should expect a 14 in the mem register by the end of execution!
+    }
   }
   control {
     seq {
-      read;
-      upd;
-      write;
+      init;
+      while lt.out with cond {
+        par {
+          seq {
+            read;
+            upd;
+            write;
+          }
+          incr;
+        }
+      }
     }
   }
 }
