@@ -1,0 +1,22 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+
+\title{838L - Milestone 1}
+\author{Arjun Vedantham \\ Yusuf Bham}
+\date{April 2024}
+
+\begin{document}
+
+\maketitle
+
+\section{Literature Review}
+% thinking Zyria needs to go here, also the FFT/parallel scan paper I sent, maybe just some parallel alg papers that map well to hardware?
+
+\section{Alterations to the Proposal}
+Rather than leveraging the CIRCT framework, we now plan on having our compiler emit Calyx IR. This IR will then be lowered into Verilog, which we can show
+as a timing simulation and potentially deploy to an FPGA. We decided to use Calyx as it has a more mature build system, and is not as experimental/development
+focused as CIRCT is right now.
+\section{Concrete Steps}
+So far, we have built sample circuits with Calyx IR, including a 4 bit adder circuit. We have simulated this circuit using Icarus, and are able to view the timing
+simulations in GTKWave. % fill in with parsing/lang details too
+\end{document}
