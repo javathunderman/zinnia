@@ -1,6 +1,16 @@
 \documentclass{article}
 \usepackage{graphicx} % Required for inserting images
 
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    pdftitle={Overleaf Example},
+    pdfpagemode=FullScreen,
+}
+
 \title{838L - Milestone 1}
 \author{Arjun Vedantham \\ Yusuf Bham}
 \date{April 2024}
@@ -9,14 +19,75 @@
 
 \maketitle
 
-\section{Literature Review}
 % thinking Zyria needs to go here, also the FFT/parallel scan paper I sent, maybe just some parallel alg papers that map well to hardware?
+\section{Literature Review}
+\subsection{\href{https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/ASPLOS-camera.pdf}{Ziria}}
+Ziria is a DSL for SDR, specifically for wireless physical layer tasks. It has
+a novel type system for stream based data, separating it into two aspects -
+stream transformers and computers. Transformers are more like that of typical
+SDR work - they execute indefinitely as a sort of continuous operation, whereas
+computers execute and stop with a control value. Ziria also has a focus on reconfigurability,
+though this isn't something we currently plan on focusing on ourselves.
+
+Ziria offers us a view of what we'd want and need to implement in our language
+to similarly handle the use-cases of SDR, as well as how we might do so. Their
+primitives and ability to frictionlessly compose actions is something that we
+also aim at doing and can be informed by their work. One important aspect of
+this is that it's able to handle the ``issue'' of effectfullness in SDR operations
+while still allowing for composition -- which is an important aspect we need to mirror.
+
+\subsection{\href{https://link.springer.com/chapter/10.1007/978-3-319-51676-9_12}{Ziria, extended}}
+In this paper, the authors extend Ziria with a new type system that allows
+it to be a pure, monadic language despite being effectful. This is an aspect
+we wanted within our own language, as monadic abstractions allow for chaining
+of things similar to stream processing primitives while still handling the effects
+present in SDR. A type system similar to the one described here is likely what we want,
+or at least something taking inspiration from it. They describe a type system which
+effectively has one overarching monadic effect, though we may be able to do something
+closer to Haskell's HM, which has been described in papers, and extend it a bit, though
+that'd be more work. 
+
+The paper \textit{also} shows the further extension of Ziria to domains outside of SDR,
+which is something we also wanted to take a look at for our own language, if we got the chance.
+
+\subsection{\href{https://aetherling.org/aetherling.pdf}{Aetherling}}
+Aetherling is a DSL for streaming accelerators. Its focus matches ours in being a DSL
+with a large focus around streaming operators, and we look to draw value from both
+the core language features and the type system. Due to it being designed around
+the composition of streams, it's particularly useful in planning out how we would do the same.
+Aetherling doesn't have to deal with side effects in the same way Ziria does, but has
+\textit{extremely} low friction composition that we also aim at having in our own language. Its embedding
+in Haskell also bears similarity to the reformulation of Ziria, which is an aspect that's worth looking into.
+
+\subsection{\href{https://dl.acm.org/doi/pdf/10.1145/3110251}{Generic Functional Parallel Algorithms: Scan and FFT}}
+Within this paper, the authors describe an alternative way of describing parallel algorithms
+instead of the more typical array-based one. They base this instead on a generic algorithm for scans and FFTs
+on typeclasses - \texttt{Foldable}, \texttt{Functor}, \texttt{Applicative}, and \texttt{Traversable}. 
+This allows for an efficient description of parallel algorithms in a way which remains \textit{functional} and sidesteps correctness issues when having to deal with indices of arrays. As our language is aimed at being functional, ideally with purity and monadicness, this paper allows us to provide a parallel api for users which matches the paradigm, reduces errors, and remains efficient. The paper also mentions that they're able to compile this to Verilog, showing the viability of this even in the context of FPGAs.
+
+\subsection{\href{https://rachit.pl/files/pubs/calyx.pdf}{Calyx}}
+Calyx, which we will be using for the project, is described in this paper. The
+paper describes the workflow for compilation to hardware as well as aspects of
+the language itself. The example-based approach of the paper is itself helpful
+in our own usage, as our own frontend will be implementing similar ideas. 
 
 \section{Alterations to the Proposal}
-Rather than leveraging the CIRCT framework, we now plan on having our compiler emit Calyx IR. This IR will then be lowered into Verilog, which we can show
-as a timing simulation and potentially deploy to an FPGA. We decided to use Calyx as it has a more mature build system, and is not as experimental/development
+Rather than leveraging the CIRCT framework, we now plan on having our compiler
+emit Calyx IR. This IR will then be lowered into Verilog, which we can show as
+a timing simulation and potentially deploy to an FPGA. We decided to use Calyx
+as it has a more mature build system, and is not as experimental/development
 focused as CIRCT is right now.
+
 \section{Concrete Steps}
-So far, we have built sample circuits with Calyx IR, including a 4 bit adder circuit. We have simulated this circuit using Icarus, and are able to view the timing
-simulations in GTKWave. % fill in with parsing/lang details too
+So far, we have built sample circuits with Calyx IR, including a 4 bit adder
+circuit. We have simulated this circuit using Icarus, and are able to view the
+timing simulations in GTKWave. We've generated the resulting verilog for direct
+use as well as run the IR through the simulator for additional testing. We've
+looked into how the testing itself works for creation of a modified test bench
+in the future that better fits our needs as well.
+
+We've also started looking into the work for building the frontend. We've 
+implemented an alpha parser to start, but currently plan on replacing it with
+something built off \href{https://github.com/rust-bakery/nom}{nom}.
+
 \end{document}
