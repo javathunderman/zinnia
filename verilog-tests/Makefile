@@ -28,5 +28,9 @@ $(CALYX_VERILOG):
 $(CHISEL_VERILOG):
 	scala-cli $(CHISEL_SRC) > $(CHISEL_VERILOG)
 
+# Essentially a no-op circuit
+minimalcounter.v:
+	fud exec minimalcounter.futil --to verilog > minimalcounter.sv && sv2v minimalcounter.sv > minimalcounter-synthesizable.v
+
 clean:
-	rm -f *.vvp *.vcd MyCounter-*
+	rm -f *.vvp *.vcd MyCounter-* minimalcounter.sv minimalcounter-synthesizable.v
