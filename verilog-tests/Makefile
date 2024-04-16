@@ -22,15 +22,18 @@ test-calyx: # This is for being able to see the wave table
 test-calyx-passthrough:
 	fud exec $(COUNTER_MODULE).futil --to dat --through icarus-verilog -s verilog.data data.json
 
-$(CALYX_VERILOG):
-	fud exec $(COUNTER_MODULE).futil --to verilog > $(CALYX_VERILOG)
+synthesize-calyx:
+	fud exec $(COUNTER_MODULE).futil --to synth-verilog > $(CALYX_VERILOG) && sv2v $(CALYX_VERILOG) > deploy/synthesizable.v
 
 $(CHISEL_VERILOG):
 	scala-cli $(CHISEL_SRC) > $(CHISEL_VERILOG)
+
+deploy-calyx: $(CALYX_VERILOG)
+	cd deploy && apio build && apio upload
 
 # Essentially a no-op circuit
 minimalcounter.v:
 	fud exec minimalcounter.futil --to verilog > minimalcounter.sv && sv2v minimalcounter.sv > minimalcounter-synthesizable.v
 
 clean:
-	rm -f *.vvp *.vcd MyCounter-* minimalcounter.sv minimalcounter-synthesizable.v
+	rm -f *.vvp *.vcd MyCounter-* minimalcounter.sv *-synthesizable.v deploy/hardware* clock-div-test/hardware*
