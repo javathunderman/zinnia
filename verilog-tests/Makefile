@@ -23,7 +23,7 @@ test-calyx-passthrough:
 	fud exec $(COUNTER_MODULE).futil --to dat --through icarus-verilog -s verilog.data data.json
 
 synthesize-calyx:
-	fud exec $(COUNTER_MODULE).futil --to synth-verilog > $(CALYX_VERILOG) && sv2v $(CALYX_VERILOG) > deploy/synthesizable.v
+	fud exec $(COUNTER_MODULE).futil --to synth-verilog > $(CALYX_VERILOG) && sv2v $(CALYX_VERILOG) > deploy/synthesizable.v && cp deploy/synthesizable.v cocotb/synthesizable.v
 
 $(CHISEL_VERILOG):
 	scala-cli $(CHISEL_SRC) > $(CHISEL_VERILOG)
@@ -33,7 +33,7 @@ deploy-calyx: $(CALYX_VERILOG)
 
 # Essentially a no-op circuit
 min_example_synth:
-	fud exec min_example.futil --to verilog > min_example.sv && sv2v min_example.sv > min_example-synthesizable.v
+	fud exec min_example.futil --to synth-verilog > min_example.sv && sv2v min_example.sv > cocotb/min_example-synthesizable.v
 
 clean:
-	rm -f *.vvp *.vcd MyCounter-* min_example.sv *-synthesizable.v deploy/hardware* clock-div-test/hardware* deploy/synthesizable.v
+	rm -f *.vvp *.vcd MyCounter-* min_example.sv *-synthesizable.v deploy/hardware* clock-div-test/hardware* deploy/synthesizable.v cocotb/synthesizable.v

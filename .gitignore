@@ -320,3 +320,5 @@ Cargo.lock
 *.pdb
 *.dblite
 *.history
+__pycache__/
+*.vcd

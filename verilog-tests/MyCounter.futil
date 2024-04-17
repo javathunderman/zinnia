@@ -6,6 +6,7 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
     @external(1) mem = comb_mem_d1(2, 1, 1);
     count = std_reg(4);
     comp = std_lt(4);
+    add = std_add(4);
   }
 
   wires {
@@ -13,6 +14,13 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
       count.write_en = 1'b1;
       count.in = 4'b0;
       init[done] = count.done;
+    }
+    group incr {
+      add.left = count.out;
+      add.right = 4'd1;
+      count.in = add.out;
+      count.write_en = 1'b1;
+      incr[done] = count.done;
     }
     comb group cond {
       comp.left = count.out;
@@ -32,6 +40,7 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
       while comp.out with cond {
         seq {
           write;
+          incr;
         }
       }
     }

@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1713336664" />
+    <testcase name="first_test" classname="cocotb_test" file="/home/arjun/coursecode/cmsc838l/verilog-tests/cocotb/cocotb_test.py" lineno="5" time="0.0012347698211669922" sim_time_ns="22.001" ratio_time="17817.895791465537" />
+  </testsuite>
+</testsuites>
