@@ -1,63 +1,37 @@
 import "primitives/core.futil";
 import "primitives/memories/comb.futil";
 
-component main(@go go: 1) -> (@done done: 1) {
+component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
   cells {
-    @external mem = comb_mem_d1(4, 1, 1);
-    val = std_reg(4);
-    add = std_add(4);
-    counter = std_reg(4);
-    add2 = std_add(4);
-    lt = std_lt(4);
+    @external(1) mem = comb_mem_d1(2, 1, 1);
+    count = std_reg(4);
+    comp = std_lt(4);
   }
+
   wires {
     group init {
-      counter.in = 4'd0;
-      counter.write_en = 1'b1;
-      init[done] = counter.done;
+      count.write_en = 1'b1;
+      count.in = 4'b0;
+      init[done] = count.done;
     }
-    group incr {
-      add2.left = counter.out;
-      add2.right = 4'd1;
-      counter.in = add2.out;
-      counter.write_en = 1'b1;
-      incr[done] = counter.done;
+    comb group cond {
+      comp.left = count.out;
+      comp.right = 4'd4;
     }
     group write {
       mem.addr0 = 1'b0;
+      mem.write_data = 2'd2;
       mem.write_en = 1'b1;
-      mem.write_data = val.out;
       write[done] = mem.done;
     }
-    group read {
-      mem.addr0 = 1'b0;
-      val.in = mem.read_data;
-      val.write_en = 1'b1;
-      read[done] = val.done;
-    }
-    group upd {
-      add.left = val.out;
-      add.right = 4'd2;
-      val.in = add.out;
-      val.write_en = 1'b1;
-      upd[done] = val.done;
-    }
-    comb group cond {
-      lt.left = counter.out;
-      lt.right = 4'd7; // We should expect a 14 in the mem register by the end of execution!
-    }
   }
+
   control {
     seq {
       init;
-      while lt.out with cond {
-        par {
-          seq {
-            read;
-            upd;
-            write;
-          }
-          incr;
+      while comp.out with cond {
+        seq {
+          write;
         }
       }
     }

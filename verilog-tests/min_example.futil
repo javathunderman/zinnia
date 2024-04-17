@@ -1,0 +1,19 @@
+import "primitives/core.futil";
+import "primitives/memories/comb.futil";
+
+component main() -> () {
+  cells {
+    @external(1) mem = comb_mem_d1(2, 1, 1);
+  }
+
+  wires {
+    mem.addr0 = 1'b0;
+    mem.write_data = 2'd2;
+    mem.write_en = 1'b1;
+    done = mem.done;
+  }
+
+  control {
+
+  }
+}

@@ -2,7 +2,7 @@ TOP = test_counter
 COUNTER_MODULE = MyCounter
 CHISEL_SRC = $(COUNTER_MODULE).scala
 CHISEL_VERILOG = $(COUNTER_MODULE)-chisel.v
-CALYX_VERILOG = $(COUNTER_MODULE)-calyx.v
+CALYX_VERILOG = $(COUNTER_MODULE)-calyx.sv
 TEST_SRC= $(COUNTER_MODULE)Test.v
 CHISEL_BIN = $(TOP)-chisel.vvp
 
@@ -32,8 +32,8 @@ deploy-calyx: $(CALYX_VERILOG)
 	cd deploy && apio build && apio upload
 
 # Essentially a no-op circuit
-minimalcounter.v:
-	fud exec minimalcounter.futil --to verilog > minimalcounter.sv && sv2v minimalcounter.sv > minimalcounter-synthesizable.v
+min_example_synth:
+	fud exec min_example.futil --to verilog > min_example.sv && sv2v min_example.sv > min_example-synthesizable.v
 
 clean:
-	rm -f *.vvp *.vcd MyCounter-* minimalcounter.sv *-synthesizable.v deploy/hardware* clock-div-test/hardware*
+	rm -f *.vvp *.vcd MyCounter-* min_example.sv *-synthesizable.v deploy/hardware* clock-div-test/hardware* deploy/synthesizable.v
