@@ -1,7 +1,7 @@
 # Oscillator
 set_io  clk 21
-set_io  go 44
-set_io reset 45
+set_io -pullup yes go 87
+set_io -pullup yes reset 88
 set_io mem_addr0 47
 set_io mem_write_en 48
 set_io mem_clk 56
