@@ -1,0 +1,1 @@
+(+ (- (among 3) 7) (* (if (== true true) 7 4) (from (== 6 6))))
