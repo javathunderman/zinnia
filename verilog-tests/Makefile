@@ -35,5 +35,9 @@ deploy-calyx: $(CALYX_VERILOG)
 min_example_synth:
 	fud exec min_example.futil --to synth-verilog > min_example.sv && sv2v min_example.sv > cocotb/min_example-synthesizable.v
 
+# Essentially a no-op circuit
+cocotb_test:
+	fud exec min_example.futil --to synth-verilog > min_example.sv && sv2v min_example.sv > cocotb/min_example-synthesizable.v
+
 clean:
 	rm -f *.vvp *.vcd MyCounter-* min_example.sv *-synthesizable.v deploy/hardware* clock-div-test/hardware* deploy/synthesizable.v cocotb/synthesizable.v
