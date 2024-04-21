@@ -1,0 +1,157 @@
+import "primitives/core.futil";
+import "primitives/memories/comb.futil";
+
+component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
+  cells {
+    @external(1) input_arr = comb_mem_d1(8, 8, 8); // 8 bits per slot, 18 slots (9 numbers + 9 for building the prefix sum tree), 8 bit index
+    @external(1) output_1 = comb_mem_d1(8, 4, 8);
+
+    val_1_2_1_1 = std_reg(8);
+    val_1_2_1_2 = std_reg(8);
+    add_1_2_1 = std_add(8);
+    res_1_2_1 = std_reg(8);
+
+    val_3_4_1_1 = std_reg(8);
+    val_3_4_1_2 = std_reg(8);
+    add_3_4_1 = std_add(8);
+    res_3_4_1 = std_reg(8);
+
+    val_5_6_1_1 = std_reg(8);
+    val_5_6_1_2 = std_reg(8);
+    add_5_6_1 = std_add(8);
+    res_5_6_1 = std_reg(8);
+
+    val_7_8_1_1 = std_reg(8);
+    val_7_8_1_2 = std_reg(8);
+    add_7_8_1 = std_add(8);
+    res_7_8_1 = std_reg(8);
+  }
+
+  wires {
+    group read_1_2_1_1 {
+        input_arr.addr0 = 8'd0; // index
+        val_1_2_1_1.write_en = 1'b1;
+        val_1_2_1_1.in = input_arr.read_data;
+        read_1_2_1_1[done] = val_1_2_1_1.done;
+    }
+    group read_1_2_1_2 {
+        input_arr.addr0 = 8'd1; // index
+        val_1_2_1_2.write_en = 1'b1;
+        val_1_2_1_2.in = input_arr.read_data;
+        read_1_2_1_2[done] = val_1_2_1_2.done;
+    }
+    group adder_1_2_1 {
+        add_1_2_1.left = val_1_2_1_1.out;
+        add_1_2_1.right = val_1_2_1_2.out;
+        res_1_2_1.write_en = 1'b1;
+        res_1_2_1.in = add_1_2_1.out;
+        adder_1_2_1[done] = res_1_2_1.done;
+    }
+    group write_res_1_2_1 {
+        output_1.addr0 = 8'd0;
+        output_1.write_en = 1'b1;
+        output_1.write_data = res_1_2_1.out;
+        write_res_1_2_1[done] = output_1.done;
+    }
+    group read_3_4_1_1 {
+        input_arr.addr0 = 8'd2; // index
+        val_3_4_1_1.write_en = 1'b1;
+        val_3_4_1_1.in = input_arr.read_data;
+        read_3_4_1_1[done] = val_3_4_1_1.done;
+    }
+    group read_3_4_1_2 {
+        input_arr.addr0 = 8'd3; // index
+        val_3_4_1_2.write_en = 1'b1;
+        val_3_4_1_2.in = input_arr.read_data;
+        read_3_4_1_2[done] = val_3_4_1_2.done;
+    }
+    group adder_3_4_1 {
+        add_3_4_1.left = val_3_4_1_1.out;
+        add_3_4_1.right = val_3_4_1_2.out;
+        res_3_4_1.write_en = 1'b1;
+        res_3_4_1.in = add_3_4_1.out;
+        adder_3_4_1[done] = res_3_4_1.done;
+    }
+    group write_res_3_4_1 {
+        output_1.addr0 = 8'd1;
+        output_1.write_en = 1'b1;
+        output_1.write_data = res_3_4_1.out;
+        write_res_3_4_1[done] = output_1.done;
+    }
+    group read_5_6_1_1 {
+        input_arr.addr0 = 8'd4; // index
+        val_5_6_1_1.write_en = 1'b1;
+        val_5_6_1_1.in = input_arr.read_data;
+        read_5_6_1_1[done] = val_5_6_1_1.done;
+    }
+    group read_5_6_1_2 {
+        input_arr.addr0 = 8'd5; // index
+        val_5_6_1_2.write_en = 1'b1;
+        val_5_6_1_2.in = input_arr.read_data;
+        read_5_6_1_2[done] = val_5_6_1_2.done;
+    }
+    group adder_5_6_1 {
+        add_5_6_1.left = val_5_6_1_1.out;
+        add_5_6_1.right = val_5_6_1_2.out;
+        res_5_6_1.write_en = 1'b1;
+        res_5_6_1.in = add_5_6_1.out;
+        adder_5_6_1[done] = res_5_6_1.done;
+    }
+    group write_res_5_6_1 {
+        output_1.addr0 = 8'd2;
+        output_1.write_en = 1'b1;
+        output_1.write_data = res_5_6_1.out;
+        write_res_5_6_1[done] = output_1.done;
+    }
+    group read_7_8_1_1 {
+        input_arr.addr0 = 8'd6; // index
+        val_7_8_1_1.write_en = 1'b1;
+        val_7_8_1_1.in = input_arr.read_data;
+        read_7_8_1_1[done] = val_7_8_1_1.done;
+    }
+    group read_7_8_1_2 {
+        input_arr.addr0 = 8'd7; // index
+        val_7_8_1_2.write_en = 1'b1;
+        val_7_8_1_2.in = input_arr.read_data;
+        read_7_8_1_2[done] = val_7_8_1_2.done;
+    }
+    group adder_7_8_1 {
+        add_7_8_1.left = val_7_8_1_1.out;
+        add_7_8_1.right = val_7_8_1_2.out;
+        res_7_8_1.write_en = 1'b1;
+        res_7_8_1.in = add_7_8_1.out;
+        adder_7_8_1[done] = res_7_8_1.done;
+    }
+    group write_res_7_8_1 {
+        output_1.addr0 = 8'd3;
+        output_1.write_en = 1'b1;
+        output_1.write_data = res_7_8_1.out;
+        write_res_7_8_1[done] = output_1.done;
+    }
+  }
+
+  control {
+    seq {
+        read_1_2_1_1;
+        read_1_2_1_2;
+        read_3_4_1_1;
+        read_3_4_1_2;
+        read_5_6_1_1;
+        read_5_6_1_2;
+        read_7_8_1_1;
+        read_7_8_1_2;
+    }
+    par { // PRAM style - EREW
+        adder_1_2_1;
+        adder_3_4_1;
+        adder_5_6_1;
+        adder_7_8_1;
+    }
+    seq {
+        write_res_1_2_1;
+        write_res_3_4_1;
+        write_res_5_6_1;
+        write_res_7_8_1;
+    }
+  }
+}
