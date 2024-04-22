@@ -322,3 +322,4 @@ Cargo.lock
 *.history
 __pycache__/
 *.vcd
+sim_build/
