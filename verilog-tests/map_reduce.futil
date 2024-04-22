@@ -26,18 +26,12 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
     add_7_8_1 = std_add(8);
     res_7_8_1 = std_reg(8);
 
-    val_1_4_2_1 = std_reg(8);
-    val_1_4_2_2 = std_reg(8);
     add_1_4_2 = std_add(8);
     res_1_4_2 = std_reg(8);
 
-    val_5_8_2_1 = std_reg(8);
-    val_5_8_2_2 = std_reg(8);
     add_5_8_2 = std_add(8);
     res_5_8_2 = std_reg(8);
 
-    val_1_8_3_1 = std_reg(8);
-    val_1_8_3_2 = std_reg(8);
     add_1_8_3 = std_add(8);
     res_1_8_3 = std_reg(8);
 
@@ -197,50 +191,50 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
         output_1.addr0 = 8'd3;
         output_1.addr1 = 8'd1;
         output_1.write_en = 1'b1;
-        output_1.write_data = val_1_2_1_1;
+        output_1.write_data = val_1_2_1_1.out;
         lsubtree_1_2[done] = output_1.done;
     }
     group lsubtree_3_4 {
         output_1.addr0 = 8'd4;
         output_1.addr1 = 8'd1;
         output_1.write_en = 1'b1;
-        output_1.write_data = val_3_4_1_1;
+        output_1.write_data = val_3_4_1_1.out;
         lsubtree_3_4[done] = output_1.done;
     }
     group lsubtree_5_6 {
         output_1.addr0 = 8'd5;
         output_1.addr1 = 8'd1;
         output_1.write_en = 1'b1;
-        output_1.write_data = val_5_6_1_1;
+        output_1.write_data = val_5_6_1_1.out;
         lsubtree_5_6[done] = output_1.done;
     }
     group lsubtree_7_8 {
         output_1.addr0 = 8'd6;
         output_1.addr1 = 8'd1;
         output_1.write_en = 1'b1;
-        output_1.write_data = val_7_8_1_1;
+        output_1.write_data = val_7_8_1_1.out;
         lsubtree_7_8[done] = output_1.done;
     }
     group lsubtree_1_4 {
         output_1.addr0 = 8'd1;
         output_1.addr1 = 8'd1;
         output_1.write_en = 1'b1;
-        output_1.write_data = val_1_4_2_1;
+        output_1.write_data = res_1_2_1.out;
         lsubtree_1_4[done] = output_1.done;
     }
     group lsubtree_5_8 {
         output_1.addr0 = 8'd2;
         output_1.addr1 = 8'd1;
         output_1.write_en = 1'b1;
-        output_1.write_data = val_5_8_2_1;
+        output_1.write_data = res_5_6_1.out;
         lsubtree_5_8[done] = output_1.done;
     }
     group lsubtree_1_8 {
         output_1.addr0 = 8'd0;
         output_1.addr1 = 8'd1;
         output_1.write_en = 1'b1;
-        output_1.write_data = val_1_8_3_1;
-        lsubtree_5_8[done] = output_1.done;
+        output_1.write_data = res_1_4_2.out;
+        lsubtree_1_8[done] = output_1.done;
     }
   }
 
@@ -268,15 +262,22 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
         }
         adder_1_8_3;
 
-        // seq {
-        //     write_res_1_2_1;
-        //     write_res_3_4_1;
-        //     write_res_5_6_1;
-        //     write_res_7_8_1;
-        //     write_res_1_4_2;
-        //     write_res_5_8_2;
-        //     write_res_1_8_3;
-        // }
+        seq {
+            write_res_1_2_1;
+            write_res_3_4_1;
+            write_res_5_6_1;
+            write_res_7_8_1;
+            write_res_1_4_2;
+            write_res_5_8_2;
+            write_res_1_8_3;
+            lsubtree_1_2;
+            lsubtree_3_4;
+            lsubtree_5_6;
+            lsubtree_7_8;
+            lsubtree_1_4;
+            lsubtree_5_8;
+            lsubtree_1_8;
+        }
 
     }
   }
