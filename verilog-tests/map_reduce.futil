@@ -4,7 +4,7 @@ import "primitives/memories/comb.futil";
 component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
   cells {
     @external(1) input_arr = comb_mem_d1(8, 8, 8); // 8 bits per slot, 18 slots (9 numbers + 9 for building the prefix sum tree), 8 bit index
-    @external(1) output_1 = comb_mem_d1(8, 8, 8);
+    @external(1) output_1 = comb_mem_d2(8, 8, 8, 8, 8);
 
     val_1_2_1_1 = std_reg(8);
     val_1_2_1_2 = std_reg(8);
@@ -65,6 +65,7 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
     }
     group write_res_1_2_1 {
         output_1.addr0 = 8'd3;
+        output_1.addr1 = 8'd0;
         output_1.write_en = 1'b1;
         output_1.write_data = res_1_2_1.out;
         write_res_1_2_1[done] = output_1.done;
@@ -90,6 +91,7 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
     }
     group write_res_3_4_1 {
         output_1.addr0 = 8'd4;
+        output_1.addr1 = 8'd0;
         output_1.write_en = 1'b1;
         output_1.write_data = res_3_4_1.out;
         write_res_3_4_1[done] = output_1.done;
@@ -115,6 +117,7 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
     }
     group write_res_5_6_1 {
         output_1.addr0 = 8'd5;
+        output_1.addr1 = 8'd0;
         output_1.write_en = 1'b1;
         output_1.write_data = res_5_6_1.out;
         write_res_5_6_1[done] = output_1.done;
@@ -140,6 +143,7 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
     }
     group write_res_7_8_1 {
         output_1.addr0 = 8'd6;
+        output_1.addr1 = 8'd0;
         output_1.write_en = 1'b1;
         output_1.write_data = res_7_8_1.out;
         write_res_7_8_1[done] = output_1.done;
@@ -170,21 +174,73 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
     }
     group write_res_1_4_2 {
         output_1.addr0 = 8'd1;
+        output_1.addr1 = 8'd0;
         output_1.write_en = 1'b1;
         output_1.write_data = res_1_4_2.out;
         write_res_1_4_2[done] = output_1.done;
     }
     group write_res_5_8_2 {
         output_1.addr0 = 8'd2;
+        output_1.addr1 = 8'd0;
         output_1.write_en = 1'b1;
         output_1.write_data = res_5_8_2.out;
         write_res_5_8_2[done] = output_1.done;
     }
     group write_res_1_8_3 {
         output_1.addr0 = 8'd0;
+        output_1.addr1 = 8'd0;
         output_1.write_en = 1'b1;
         output_1.write_data = res_1_8_3.out;
         write_res_1_8_3[done] = output_1.done;
+    }
+    group lsubtree_1_2 {
+        output_1.addr0 = 8'd3;
+        output_1.addr1 = 8'd1;
+        output_1.write_en = 1'b1;
+        output_1.write_data = val_1_2_1_1;
+        lsubtree_1_2[done] = output_1.done;
+    }
+    group lsubtree_3_4 {
+        output_1.addr0 = 8'd4;
+        output_1.addr1 = 8'd1;
+        output_1.write_en = 1'b1;
+        output_1.write_data = val_3_4_1_1;
+        lsubtree_3_4[done] = output_1.done;
+    }
+    group lsubtree_5_6 {
+        output_1.addr0 = 8'd5;
+        output_1.addr1 = 8'd1;
+        output_1.write_en = 1'b1;
+        output_1.write_data = val_5_6_1_1;
+        lsubtree_5_6[done] = output_1.done;
+    }
+    group lsubtree_7_8 {
+        output_1.addr0 = 8'd6;
+        output_1.addr1 = 8'd1;
+        output_1.write_en = 1'b1;
+        output_1.write_data = val_7_8_1_1;
+        lsubtree_7_8[done] = output_1.done;
+    }
+    group lsubtree_1_4 {
+        output_1.addr0 = 8'd1;
+        output_1.addr1 = 8'd1;
+        output_1.write_en = 1'b1;
+        output_1.write_data = val_1_4_2_1;
+        lsubtree_1_4[done] = output_1.done;
+    }
+    group lsubtree_5_8 {
+        output_1.addr0 = 8'd2;
+        output_1.addr1 = 8'd1;
+        output_1.write_en = 1'b1;
+        output_1.write_data = val_5_8_2_1;
+        lsubtree_5_8[done] = output_1.done;
+    }
+    group lsubtree_1_8 {
+        output_1.addr0 = 8'd0;
+        output_1.addr1 = 8'd1;
+        output_1.write_en = 1'b1;
+        output_1.write_data = val_1_8_3_1;
+        lsubtree_5_8[done] = output_1.done;
     }
   }
 
@@ -211,15 +267,16 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
             adder_5_8_2;
         }
         adder_1_8_3;
-        seq {
-            write_res_1_2_1;
-            write_res_3_4_1;
-            write_res_5_6_1;
-            write_res_7_8_1;
-            write_res_1_4_2;
-            write_res_5_8_2;
-            write_res_1_8_3;
-        }
+
+        // seq {
+        //     write_res_1_2_1;
+        //     write_res_3_4_1;
+        //     write_res_5_6_1;
+        //     write_res_7_8_1;
+        //     write_res_1_4_2;
+        //     write_res_5_8_2;
+        //     write_res_1_8_3;
+        // }
 
     }
   }
