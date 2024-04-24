@@ -1,6 +1,6 @@
 .scala-build/
 .bsp
-
+*.vscode/
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof
