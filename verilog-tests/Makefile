@@ -1,10 +1,10 @@
 TOP = test_counter
 COUNTER_MODULE = MyCounter
-CHISEL_SRC = $(COUNTER_MODULE).scala
-CHISEL_VERILOG = $(COUNTER_MODULE)-chisel.v
+CHISEL_SRC = chisel/$(COUNTER_MODULE).scala
+CHISEL_VERILOG = chisel/$(COUNTER_MODULE)-chisel.v
 CALYX_VERILOG = $(COUNTER_MODULE)-calyx.sv
-TEST_SRC= $(COUNTER_MODULE)Test.v
-CHISEL_BIN = $(TOP)-chisel.vvp
+TEST_SRC= chisel/$(COUNTER_MODULE)Test.v
+CHISEL_BIN = chisel/$(TOP)-chisel.vvp
 
 $(CHISEL_BIN): $(CHISEL_VERILOG) $(TEST_SRC)
 	iverilog -o $(CHISEL_BIN) -s $(TOP) $(CHISEL_VERILOG) $(TEST_SRC)
@@ -30,7 +30,8 @@ $(CHISEL_VERILOG):
 
 deploy-calyx: $(CALYX_VERILOG)
 	cd deploy && apio build && apio upload
-
+output-mem:
+	fud exec map_reduce.futil --to dat -s verilog.data mr-data.json --through icarus-verilog
 # Essentially a no-op circuit
 min_example_synth:
 	fud exec min_example.futil --to synth-verilog > min_example.sv && sv2v min_example.sv > cocotb/min_example-synthesizable.v
