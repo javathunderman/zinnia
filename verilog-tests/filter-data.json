@@ -1,0 +1,18 @@
+{
+    "input_arr": {
+      "data": [3, 1, 7, 0, 4, 1, 6, 3],
+      "format": {
+        "numeric_type": "bitnum",
+        "is_signed": false,
+        "width": 8
+      }
+    },
+    "output_arr": {
+      "data": [0, 0, 0, 0, 0, 0, 0, 0],
+      "format": {
+        "numeric_type": "bitnum",
+        "is_signed": false,
+        "width": 8
+      }
+    }
+  }

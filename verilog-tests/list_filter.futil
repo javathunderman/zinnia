@@ -1,0 +1,68 @@
+import "primitives/core.futil";
+import "primitives/memories/comb.futil";
+
+component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
+    cells {
+        @external input_arr = comb_mem_d1(8, 8, 8);
+        @external output_arr = comb_mem_d1(8, 8, 8);
+        input_index = std_reg(8);
+        output_index = std_reg(8); // holds the number of filtered elements at the end, since memories are statically sized
+        comparator = std_lt(8); // determine the comparator, should be combinational in compiler implementation
+        cutoff_val = std_const(8, 5);
+        current_val = std_reg(8);
+        adder = std_add(8);
+    }
+
+    wires {
+        group input_incr {
+            adder.left = input_index.out;
+            adder.right = 8'd1;
+            input_index.write_en = 1'b1;
+            input_index.in = adder.out;
+            input_incr[done] = input_index.done;
+        }
+
+        group output_incr {
+            adder.left = output_index.out;
+            adder.right = 8'd1;
+            output_index.write_en = 1'b1;
+            output_index.in = adder.out;
+            output_incr[done] = output_index.done;
+        }
+
+        comb group cond {
+            comparator.left = current_val.out;
+            comparator.right = cutoff_val.out;
+        }
+        group load_val {
+            input_arr.addr0 = input_index.out;
+            current_val.write_en = 1'b1;
+            current_val.in = input_arr.read_data;
+            load_val[done] = current_val.done;
+        }
+
+        group write_val {
+            output_arr.addr0 = output_index.out;
+            output_arr.write_en = 1'b1;
+            output_arr.write_data = current_val.out;
+            write_val[done] = output_arr.done;
+        }
+    }
+
+    control {
+        seq {
+            repeat 8 { // determined statically
+                seq {
+                    load_val;
+                    if comparator.out with cond {
+                        seq {
+                            write_val;
+                            output_incr;
+                        }
+                    }
+                    input_incr;
+                }
+            }
+        }
+    }
+}
