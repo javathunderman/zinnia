@@ -36,7 +36,6 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
     add_1_8_3 = std_add(8);
     res_1_8_3 = std_reg(8);
 
-    downsweep_add = std_add(8);
     reg_downsweep_acc = std_reg(8);
     reg_downsweep_l = std_reg(8);
     reg_downsweep_r = std_reg(8);
@@ -45,8 +44,6 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
     reg_downsweep_incr = std_reg(8);
     span_add = std_add(8);
     span_add_2 = std_add(8);
-    comparator_span = std_lt(8);
-
   }
 
   wires {
