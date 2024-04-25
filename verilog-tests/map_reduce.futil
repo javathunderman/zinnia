@@ -5,7 +5,7 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
   cells {
     @external input_arr = comb_mem_d1(8, 8, 8); // 8 bits per slot, 18 slots (9 numbers + 9 for building the prefix sum tree), 8 bit index
     @external output_1 = comb_mem_d2(8, 8, 8, 8, 8);
-    @external output_final = comb_mem_d1(8, 8, 8);
+    @external output_final = comb_mem_d1(8, 16, 8);
 
     val_1_2_1_1 = std_reg(8);
     val_1_2_1_2 = std_reg(8);
@@ -312,6 +312,21 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
         add_r_child[done] = output_final.done;
     }
 
+    group load_final_sum {
+        output_1.addr0 = 8'd0; // read from the top of the reduction tree (total sum)
+        output_1.addr1 = 8'd0;
+        reg_downsweep_acc.write_en = 1'b1;
+        reg_downsweep_acc.in = output_1.read_data;
+        load_final_sum[done] = reg_downsweep_acc.done;
+    }
+
+    group write_final_sum {
+        output_final.addr0 = 8'd15; // statically determined, should just be the end of the double sized tree memory
+        output_final.write_en = 1'b1;
+        output_final.write_data = reg_downsweep_acc.out;
+        write_final_sum[done] = output_final.done;
+    }
+
   }
 
   control {
@@ -338,7 +353,7 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
         }
         adder_1_8_3;
 
-        seq {
+        seq { // avoid writing to memory after upsweep?
             write_res_1_2_1;
             write_res_3_4_1;
             write_res_5_6_1;
@@ -353,36 +368,20 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
             lsubtree_1_4;
             lsubtree_5_8;
             lsubtree_1_8;
-
-            calc_l_child_index;
-            calc_r_child_index;
-            load_current_val;
-            write_l_child;
-            load_left_subtree_val;
-            load_r_child;
-            add_r_child;
-            incr_index;
-
-            calc_l_child_index;
-            calc_r_child_index;
-            load_current_val;
-            write_l_child;
-            load_left_subtree_val;
-            load_r_child;
-            add_r_child;
-            incr_index;
-
-            calc_l_child_index;
-            calc_r_child_index;
-            load_current_val;
-            write_l_child;
-            load_left_subtree_val;
-            load_r_child;
-            add_r_child;
-            incr_index;
-
-
-
+        }
+        repeat 8 { // statically determined
+            seq {
+                calc_l_child_index;
+                calc_r_child_index;
+                load_current_val;
+                write_l_child;
+                load_left_subtree_val;
+                load_r_child;
+                add_r_child;
+                incr_index;
+            }
+            load_final_sum;
+            write_final_sum;
         }
     }
   }
