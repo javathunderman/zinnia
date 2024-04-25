@@ -5,6 +5,7 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
   cells {
     @external input_arr = comb_mem_d1(8, 8, 8); // 8 bits per slot, 18 slots (9 numbers + 9 for building the prefix sum tree), 8 bit index
     @external output_1 = comb_mem_d2(8, 8, 8, 8, 8);
+    @external output_final = comb_mem_d1(8, 8, 8);
 
     val_1_2_1_1 = std_reg(8);
     val_1_2_1_2 = std_reg(8);
@@ -39,10 +40,11 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
     reg_downsweep_acc = std_reg(8);
     reg_downsweep_l = std_reg(8);
     reg_downsweep_r = std_reg(8);
-    reg_downsweep_ind = std_reg(8);
+    reg_downsweep_l_ind = std_reg(8);
+    reg_downsweep_r_ind = std_reg(8);
     reg_downsweep_incr = std_reg(8);
     span_add = std_add(8);
-    span_ls = std_lsh(8);
+    span_add_2 = std_add(8);
     comparator_span = std_lt(8);
 
   }
@@ -246,59 +248,70 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
         output_1.write_data = res_1_4_2.out;
         lsubtree_1_8[done] = output_1.done;
     }
-    group init_downsweep {
-        reg_downsweep_acc.write_en = 1'b1;
-        reg_downsweep_acc.in = 8'd0;
-        init_downsweep[done] = reg_downsweep_acc.done;
+    group calc_l_child_index { // calculates the left child index and stores in reg_downsweep_l register
+        span_add.left = reg_downsweep_incr.out;
+        span_add.right = reg_downsweep_incr.out;
+        span_add_2.left = span_add.out;
+        span_add_2.right = 8'd1;
+        reg_downsweep_l_ind.write_en = 1'b1;
+        reg_downsweep_l_ind.in = span_add_2.out;
+        calc_l_child_index[done] = reg_downsweep_l_ind.done;
     }
-    group downsweep_load {
-        output_1.addr0 = reg_downsweep_ind.out;
-        output_1.addr1 = 8'd1;
-        reg_downsweep_r.write_en = 1'b1;
-        reg_downsweep_r.in = output_1.read_data;
-        downsweep_load[done] = reg_downsweep_r.done;
+    group calc_r_child_index { // calculates the right child index and stores in reg_downsweep_r register
+        span_add.left = reg_downsweep_incr.out;
+        span_add.right = reg_downsweep_incr.out;
+        span_add_2.left = span_add.out;
+        span_add_2.right = 8'd2;
+        reg_downsweep_r_ind.write_en = 1'b1;
+        reg_downsweep_r_ind.in = span_add_2.out;
+        calc_r_child_index[done] = reg_downsweep_r_ind.done;
     }
-    comb group span_cond {
-        comparator_span.left = reg_downsweep_ind.out;
-        comparator_span.right = 8'd8;
-    }
-    group span_incr {
+
+    group incr_index {
         span_add.left = reg_downsweep_incr.out;
         span_add.right = 8'd1;
         reg_downsweep_incr.write_en = 1'b1;
         reg_downsweep_incr.in = span_add.out;
-        span_incr[done] = reg_downsweep_incr.done;
+        incr_index[done] = reg_downsweep_incr.done;
     }
-    group span_ind_calc {
-        span_ls.left = reg_downsweep_incr.out;
-        span_ls.right = 8'd1;
-        span_add.left = reg_downsweep_ind.out;
-        span_add.right = span_ls.out;
-        reg_downsweep_ind.write_en = 1'b1;
-        reg_downsweep_ind.in = span_add.out;
-        span_ind_calc[done] = reg_downsweep_ind.done;
+
+    group write_l_child {
+        output_final.addr0 = reg_downsweep_l_ind.out;
+        output_final.write_en = 1'b1;
+        output_final.write_data = reg_downsweep_acc.out;
+        write_l_child[done] = output_final.done;
     }
-    group downsweep_r {
-        downsweep_add.left = reg_downsweep_r.out;
-        downsweep_add.right = reg_downsweep_acc.out;
-        reg_downsweep_acc.write_en = 1'b1;
-        reg_downsweep_acc.in = downsweep_add.out;
-        downsweep_r[done] = reg_downsweep_acc.done;
-    }
-    group load_input_val {
-        input_arr.addr0 = 8'd7;
+
+    group load_r_child { // obtains the right child value
+        output_final.addr0 = reg_downsweep_incr.out;
         reg_downsweep_r.write_en = 1'b1;
-        reg_downsweep_r.in = input_arr.read_data;
-        load_input_val[done] = reg_downsweep_r.done;
+        reg_downsweep_r.in = output_final.read_data;
+        load_r_child[done] = reg_downsweep_r.done;
     }
-    group write_downsweep {
-        input_arr.addr0 = 8'd7;
-        downsweep_add.left = reg_downsweep_r.out;
-        downsweep_add.right = reg_downsweep_acc.out;
-        input_arr.write_en = 1'b1;
-        input_arr.write_data = downsweep_add.out;
-        write_downsweep[done] = input_arr.done;
+
+    group load_current_val {
+        output_final.addr0 = reg_downsweep_incr.out;
+        reg_downsweep_acc.write_en = 1'b1;
+        reg_downsweep_acc.in = output_final.read_data;
+        load_current_val[done] = reg_downsweep_acc.done;
     }
+    group load_left_subtree_val { // obtains the left child value
+        output_1.addr0 = reg_downsweep_incr.out;
+        output_1.addr1 = 8'd1;
+        reg_downsweep_acc.write_en = 1'b1;
+        reg_downsweep_acc.in = output_1.read_data;
+        load_left_subtree_val[done] = reg_downsweep_acc.done;
+    }
+
+    group add_r_child {
+        span_add.left = reg_downsweep_r.out;
+        span_add.right = reg_downsweep_acc.out;
+        output_final.addr0 = reg_downsweep_r_ind.out;
+        output_final.write_en = 1'b1;
+        output_final.write_data = span_add.out;
+        add_r_child[done] = output_final.done;
+    }
+
   }
 
   control {
@@ -340,19 +353,37 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
             lsubtree_1_4;
             lsubtree_5_8;
             lsubtree_1_8;
-            seq {
-                init_downsweep;
-                while comparator_span.out with span_cond {
-                    downsweep_load;
-                    downsweep_r;
-                    span_incr;
-                    span_ind_calc;
-                }
-                load_input_val;
-                write_downsweep;
-            }
-        }
 
+            calc_l_child_index;
+            calc_r_child_index;
+            load_current_val;
+            write_l_child;
+            load_left_subtree_val;
+            load_r_child;
+            add_r_child;
+            incr_index;
+
+            calc_l_child_index;
+            calc_r_child_index;
+            load_current_val;
+            write_l_child;
+            load_left_subtree_val;
+            load_r_child;
+            add_r_child;
+            incr_index;
+
+            calc_l_child_index;
+            calc_r_child_index;
+            load_current_val;
+            write_l_child;
+            load_left_subtree_val;
+            load_r_child;
+            add_r_child;
+            incr_index;
+
+
+
+        }
     }
   }
 }
