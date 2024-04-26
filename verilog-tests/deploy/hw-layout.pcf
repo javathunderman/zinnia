@@ -1,14 +1,13 @@
 # Oscillator
-set_io  clk 21
-set_io -pullup yes go 87
-set_io -pullup yes reset 88
-set_io mem_addr0 47
-set_io mem_write_en 48
-set_io mem_clk 56
-set_io mem_reset 60
-set_io mem_read_data[0] 99
-set_io mem_read_data[1] 97
-set_io mem_done 95
-set_io mem_write_data[0] 119
-set_io mem_write_data[1] 96
-set_io done 98
+set_io clk 21
+set_io spi_go 87
+set_io -pullup yes spi_reset 88
+set_io spi_clk 90
+set_io go 91
+set_io -pullup yes reset 81
+set_io spi_input_signal 78
+set_io out[4] 96
+set_io out[5] 97
+set_io out[6] 98
+set_io out[7] 99
+set_io done 95

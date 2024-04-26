@@ -1,7 +1,7 @@
 import "primitives/core.futil";
 import "primitives/memories/comb.futil";
 
-component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
+component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@out out : 4, @done done: 1) {
   cells {
     @external(1) mem = comb_mem_d1(2, 1, 1);
     count = std_reg(4);
@@ -32,6 +32,7 @@ component main(@go go: 1, @clk clk: 1, @reset reset: 1) -> (@done done: 1) {
       mem.write_en = 1'b1;
       write[done] = mem.done;
     }
+    out = count.out;
   }
 
   control {

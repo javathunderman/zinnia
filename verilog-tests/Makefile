@@ -25,10 +25,17 @@ test-calyx-passthrough:
 synthesize-calyx:
 	fud exec $(COUNTER_MODULE).futil --to synth-verilog > $(CALYX_VERILOG) && sv2v $(CALYX_VERILOG) > deploy/synthesizable.v && cp deploy/synthesizable.v cocotb/synthesizable.v
 
+spi-driver:
+	fud exec spi-driver.futil --to synth-verilog > spi-driver.sv && sv2v spi-driver.sv > deploy/synthesizable.v && cp deploy/synthesizable.v cocotb/synthesizable.v
+	yosys -p "synth_ice40 -top main -json deploy/hardware.json" -q deploy/synthesizable.v
+	nextpnr-ice40 --hx1k --package tq144 --json deploy/hardware.json --asc deploy/hardware.asc --pcf deploy/hw-layout.pcf -q --pcf-allow-unconstrained
+	icepack deploy/hardware.asc deploy/hardware.bin
+	iceprog -d i:0x0403:0x6010:0 deploy/hardware.bin
+
 $(CHISEL_VERILOG):
 	scala-cli $(CHISEL_SRC) > $(CHISEL_VERILOG)
 
-deploy-calyx: $(CALYX_VERILOG)
+deploy-calyx:
 	cd deploy && apio build && apio upload
 output-mem:
 	fud exec map_reduce.futil --to dat -s verilog.data mr-data.json --through icarus-verilog

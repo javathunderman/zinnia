@@ -1,0 +1,47 @@
+import "primitives/core.futil";
+import "primitives/memories/comb.futil";
+
+component spi_driver(@go go: 1, @clk clk: 1, @reset reset: 1, input_signal: 1) -> (out: 1) {
+    cells {
+        ref spi_buff = comb_mem_d1(8, 1, 1);
+        accumulator = std_reg(8);
+        ls = std_lsh(8);
+        pad_signal = std_pad(1, 8);
+        set_bit = std_or(8);
+        incr = std_reg(1);
+    }
+
+    wires {
+        group load_val {
+            spi_buff.addr0 = 1'd0;
+            accumulator.write_en = 1'b1;
+            accumulator.in = spi_buff.read_data;
+            load_val[done] = spi_buff.done;
+        }
+        group accumulate {
+            ls.left = accumulator.out;
+            ls.right = 8'd1;
+            pad_signal.in = input_signal;
+            set_bit.left = ls.out;
+            set_bit.right = pad_signal.out;
+            accumulator.write_en = 1'b1;
+            accumulator.in = set_bit.out;
+            accumulate[done] = accumulator.done;
+        }
+        group write_reg_and_flush {
+            spi_buff.addr0 = incr.out;
+            spi_buff.write_en = 1'b1;
+            spi_buff.write_data = accumulator.out;
+            write_reg_and_flush[done] = spi_buff.done;
+        }
+    }
+    control {
+        load_val;
+        repeat 8 {
+            seq {
+                accumulate;
+            }
+        }
+        write_reg_and_flush;
+    }
+}
