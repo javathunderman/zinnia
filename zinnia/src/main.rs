@@ -71,6 +71,10 @@ enum BinaryOp {
     Div,
     Eq,
     NotEq,
+    Lt,
+    Gt,
+    Geq,
+    Leq
 }
 
 #[derive(Debug)]
@@ -177,7 +181,7 @@ fn lexer<'src>(
     let ctrl = one_of("()[],").map(Token::Ctrl);
 
     // A parser for operators
-    let op = one_of("+*-/!=")
+    let op = one_of("+*-/!=><")
         .repeated()
         .at_least(1)
         .to_slice()
@@ -271,6 +275,10 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
             .or(just(Token::Op("+")).to(BinaryOp::Add))
             .or(just(Token::Op("==")).to(BinaryOp::Eq))
             .or(just(Token::Op("!")).to(BinaryOp::NotEq))
+            .or(just(Token::Op(">=")).to(BinaryOp::Geq))
+            .or(just(Token::Op("<=")).to(BinaryOp::Leq))
+            .or(just(Token::Op(">")).to(BinaryOp::Gt))
+            .or(just(Token::Op("<")).to(BinaryOp::Lt))
             .labelled("binary operator");
 
         let bop = bop_tok
