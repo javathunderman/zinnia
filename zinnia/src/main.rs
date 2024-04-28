@@ -36,10 +36,16 @@ impl <'src> fmt::Display for Token<'src> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-enum Value {
+enum Prim {
     Bool(bool),
     NumF(f64),
     NumI(i64),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum Value {
+    Prim(Prim),
+    Vec(Box<[Value]>)
     // Func(&'src str),
 }
 
@@ -145,7 +151,7 @@ fn lexer<'src>(
         .unwrapped()
         .map(Token::NumI);
 
-    let ctrl = one_of("()").map(Token::Ctrl);
+    let ctrl = one_of("()[],").map(Token::Ctrl);
 
     // A parser for operators
     let op = one_of("+*-/!=")
@@ -190,18 +196,35 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
     extra::Err<Rich<'tokens, Token<'src>, Span>>,
 > + Clone {
     recursive(|expr| {
-        // let atom = recursive(|subexpr| {
-        let val = select! {
-            Token::Bool(x) => Expr::Value(Value::Bool(x)),
-            Token::NumF(n) => Expr::Value(Value::NumF(n)),
-            Token::NumI(n) => Expr::Value(Value::NumI(n)),
+        let prim = select! {
+            Token::Bool(x) => Value::Prim(Prim::Bool(x)),
+            Token::NumF(n) => Value::Prim(Prim::NumF(n)),
+            Token::NumI(n) => Value::Prim(Prim::NumI(n)),
         }
-        .labelled("value");
+        .labelled("prim");
+
+        let vec = prim.clone()
+             .separated_by(just(Token::Ctrl(',')).recover_with(skip_then_retry_until(
+                any().ignored(),
+                one_of([Token::Ctrl(','), Token::Ctrl(']')]).ignored(),
+            )))
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .delimited_by(
+                just(Token::Ctrl('[')),
+                just(Token::Ctrl(']'))
+                          .ignored()
+                          .recover_with(via_parser(end()))
+                          .recover_with(skip_then_retry_until(any().ignored(), end()))
+            )
+            .map(|v| Value::Vec(v.into_boxed_slice()));
 
         let id = select! {
             Token::Ident(id) => id
         }
         .labelled("identifier");
+
+        let val = prim.or(vec).map(Expr::Value);
 
         let atom = val
             .or(id.map(Expr::Id))
