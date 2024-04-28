@@ -84,6 +84,7 @@ enum Expr<'src> {
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
     Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>),
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Let(Box<[(&'src str, Box<Spanned<Self>>)]>, Box<Spanned<Self>>)
 }
 
 fn main() {
@@ -178,7 +179,7 @@ fn lexer<'src>(
            })
     };
 
-    let ctrl = one_of("()[],").map(Token::Ctrl);
+    let ctrl = one_of("()[],:").map(Token::Ctrl);
 
     // A parser for operators
     let op = one_of("+*-/!=><")
@@ -303,9 +304,40 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                 )
             });
 
+
+        // e.g.
+        // (let ((x: i8, 3), (y: vec<8, i8>, [1, 2, 3, 4, 5])) 
+        //      (+ (broadcast x 8) y))
+        // TODO: type annotations
+        let let_ = just(Token::Let)
+            .ignore_then({
+                let binding = id
+                    .then_ignore(just(Token::Ctrl(',')))
+                    .then(expr.clone())
+                    .delimited_by(
+                        just(Token::Ctrl('(')),
+                        just(Token::Ctrl(')'))
+                    )
+                    .map(|(id, expr)| ((id, Box::new(expr))))
+                    .labelled("binding");
+
+                binding
+                    .separated_by(just(Token::Ctrl(',')).recover_with(skip_then_retry_until(any().ignored(), one_of([Token::Ctrl(')'), Token::Ctrl('(')]).ignored())))
+                    .collect::<Vec<_>>()
+                    .map(Vec::into_boxed_slice)
+                    .delimited_by(
+                        just(Token::Ctrl('(')),
+                        just(Token::Ctrl(')'))
+                    )
+            })
+            .then(expr.clone())
+            .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
+            .map_with(|(binds, body), e| (Expr::Let(binds, Box::new(body)), e.span()));
+
         atom.clone()
             .or(if_)
             .or(bop)
+            .or(let_)
             .or(call)
     })
 }
