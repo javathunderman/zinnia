@@ -1,6 +1,6 @@
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::prelude::*;
-use std::{collections::HashMap, env, fmt::{self, Display}, fs};
+use std::fmt::{self};
 
 pub type Span = SimpleSpan<usize>;
 
@@ -8,7 +8,7 @@ pub type Span = SimpleSpan<usize>;
 enum Token<'src> {
     Bool(bool),
     NumF(f64),
-    NumI(bool, u64, Option<NSize>),
+    NumI(bool, u64, Option<NType>),
     // Do we want this?
     // Str(&'src str),
     Op(&'src str),
@@ -18,52 +18,69 @@ enum Token<'src> {
     // Fn,
     Let,
     If,
+    NType(NType),
+    Vec,
 }
 
-impl <'src> fmt::Display for Token<'src> {
+impl<'src> fmt::Display for Token<'src> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Token::Bool(x) => write!(f, "{}", x),
-            Token::NumF(n) => write!(f, "{}", n),
+            Token::Bool(x) => x.fmt(f),
+            Token::NumF(n) => n.fmt(f),
+            Token::Op(s) => s.fmt(f),
+            Token::Ctrl(c) => c.fmt(f),
+            Token::Ident(s) => s.fmt(f),
+            Token::NType(ty) => ty.fmt(f),
             Token::NumI(s, n, sz) => {
                 write!(f, "{}{}", if *s { "-" } else { "" }, n)?;
 
                 if let Some(sz) = sz {
-                    write!(f, "{}{}", if sz.sign { 'i' } else { 'u' }, sz.width)?
+                    write!(f, "{}", sz)?;
                 }
 
                 Ok(())
-            },
-            Token::Op(s) => write!(f, "{}", s),
-            Token::Ctrl(c) => write!(f, "{}", c),
-            Token::Ident(s) => write!(f, "{}", s),
+            }
             Token::Let => write!(f, "let"),
             Token::If => write!(f, "if"),
+            Token::Vec => write!(f, "Vec"),
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-struct NSize {
+// A numeric type
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NType {
     sign: bool,
-    width: i8
+    width: i8,
+}
+
+impl fmt::Display for NType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}", if self.sign { 'i' } else { 'u' }, self.width)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Type<'a> {
+    NType(NType),
+    Vec(NType, u8),
+    Ident(&'a str, Vec<Spanned<Type<'a>>>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
 enum Prim {
     Bool(bool),
     NumF(f64),
-    NumI(Option<NSize>, bool, u64),
+    NumI(Option<NType>, bool, u64),
 }
 
 #[derive(Clone, Debug, PartialEq)]
 enum Value {
     Prim(Prim),
-    Vec(Box<[Value]>)
-    // Func(&'src str),
+    Vec(Box<[Value]>), // Func(&'src str),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum BinaryOp {
     Add,
     Sub,
@@ -74,17 +91,24 @@ enum BinaryOp {
     Lt,
     Gt,
     Geq,
-    Leq
+    Leq,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+struct Binding<'a> {
+    id: &'a str,
+    type_hint: Option<Spanned<Type<'a>>>,
+    expr: Box<Spanned<Expr<'a>>>,
+}
+
+#[derive(Debug, Clone)]
 enum Expr<'src> {
     Id(&'src str),
     Value(Value),
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
     Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>),
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
-    Let(Box<[(&'src str, Box<Spanned<Self>>)]>, Box<Spanned<Self>>)
+    Let(Box<[Binding<'src>]>, Box<Spanned<Self>>),
 }
 
 fn main() {
@@ -107,9 +131,13 @@ fn main() {
             .parse(tokens.as_slice().spanned((src.len()..src.len()).into()))
             .into_output_errors();
 
-        dbg!(ast);
+        if let Some(ast) = ast {
+            // we'd eval here
+            dbg!(ast);
+        } else {
+            dbg!(tokens);
+        }
 
-        // we'd eval here, if ast is Some
         parse_errs
     } else {
         Vec::new()
@@ -162,21 +190,21 @@ fn lexer<'src>(
         .unwrapped()
         .map(Token::NumF);
 
-    let int_num = { 
-        let int_lit = just('-')
-            .or_not()
-            .then(text::int(10));
+    let num_t = one_of(['u', 'i'])
+        .then(text::int(10).to_slice().from_str::<i8>().unwrapped())
+        .map(|(sign, width)| NType {
+            sign: sign == 'i',
+            width,
+        });
 
-        let type_ = one_of(['u', 'i']).then(text::int(10).to_slice().from_str::<i8>().unwrapped());
+    let int_num = {
+        let int_lit = just('-').or_not().then(text::int(10));
 
-        int_lit.then(type_.or_not())
+        int_lit
+            .then(num_t.or_not())
             .map(|((sign, digits), ty): ((_, &str), _)| {
-                Token::NumI(
-                    sign.is_some(),
-                    digits.parse().unwrap(),
-                    ty.map(|(sign_char, width)| NSize { sign: sign_char == 'i', width })
-                )
-           })
+                Token::NumI(sign.is_some(), digits.parse().unwrap(), ty)
+            })
     };
 
     let ctrl = one_of("()[],:").map(Token::Ctrl);
@@ -192,15 +220,18 @@ fn lexer<'src>(
         .then(any().and_is(just('\n').not()).repeated())
         .padded();
 
+    let num_t_tok = num_t.map(Token::NType);
+
     let ident = text::ascii::ident().map(|ident: &str| match ident {
         "if" => Token::If,
         "true" => Token::Bool(true),
         "false" => Token::Bool(false),
         "let" => Token::Let,
+        "Vec" => Token::Vec,
         _ => Token::Ident(ident),
     });
 
-    let token = int_num.or(f_num).or(op).or(ctrl).or(ident);
+    let token = int_num.or(f_num).or(op).or(ctrl).or(num_t_tok).or(ident);
 
     token
         .map_with(|tok, e| (tok, e.span()))
@@ -231,8 +262,8 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
         }
         .labelled("prim");
 
-        let vec = prim.clone()
-             .separated_by(just(Token::Ctrl(',')).recover_with(skip_then_retry_until(
+        let vec = prim
+            .separated_by(just(Token::Ctrl(',')).recover_with(skip_then_retry_until(
                 any().ignored(),
                 one_of([Token::Ctrl(','), Token::Ctrl(']')]).ignored(),
             )))
@@ -241,9 +272,9 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
             .delimited_by(
                 just(Token::Ctrl('[')),
                 just(Token::Ctrl(']'))
-                          .ignored()
-                          .recover_with(via_parser(end()))
-                          .recover_with(skip_then_retry_until(any().ignored(), end()))
+                    .ignored()
+                    .recover_with(via_parser(end()))
+                    .recover_with(skip_then_retry_until(any().ignored(), end())),
             )
             .map(|v| Value::Vec(v.into_boxed_slice()));
 
@@ -287,57 +318,93 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
             .then(expr.clone().labelled("rhs"))
             .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
             .map_with(|((op, lhs), rhs), e| {
-                (Expr::Binary(
-                    Box::new(lhs),
-                    op,
-                    Box::new(rhs)
-                ), e.span())
+                (Expr::Binary(Box::new(lhs), op, Box::new(rhs)), e.span())
             });
 
-        let call = 
-            expr.clone().then(expr.clone().repeated().at_least(1).collect::<Vec<_>>().map_with(|args, e| (args, e.span())))
+        let call = expr
+            .clone()
+            .then(
+                expr.clone()
+                    .repeated()
+                    .at_least(1)
+                    .collect::<Vec<_>>()
+                    .map_with(|args, e| (args, e.span())),
+            )
             .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
-            .map_with(|(fn_, args), e| {
-                (
-                    Expr::Call(Box::new(fn_), args),
-                    e.span()
-                )
-            });
+            .map_with(|(fn_, args), e| (Expr::Call(Box::new(fn_), args), e.span()));
 
+        let type_ = recursive(|type_| {
+            let generic = id
+                .then(
+                    type_
+                        .separated_by(just(Token::Ctrl(',')))
+                        .at_least(1)
+                        .collect::<Vec<_>>()
+                        .delimited_by(just(Token::Op("<")), just(Token::Op(">")))
+                        .or_not(),
+                )
+                .map_with(|(id, args), e| {
+                    (Type::Ident(id, args.unwrap_or_else(Vec::new)), e.span())
+                });
+
+            let nt = select! {
+                Token::NType(ty) => Type::NType(ty)
+            }
+            .map_with(|x, e| (x, e.span()));
+
+            // NOTE: Vec is a primitive which only takes numeric types
+            // and this is currently checked at a *parser* level
+            let vec_t = just(Token::Vec)
+                .ignore_then(
+                    select! {
+                        Token::NType(ty) => ty
+                    }
+                    .then_ignore(just(Token::Ctrl(',')))
+                    .then(
+                        select! {
+                          Token::NumI(false, val, None) => val
+                        }
+                        .filter(|x| 0 < *x && *x < 256)
+                        .labelled("size (0-255)")
+                        .map(|x| x as u8),
+                    )
+                    .delimited_by(just(Token::Op("<")), just(Token::Op(">"))),
+                )
+                .map_with(|(num_t, count), e| (Type::Vec(num_t, count), e.span()));
+
+            nt.or(vec_t).or(generic)
+        });
 
         // e.g.
-        // (let ((x: i8, 3), (y: vec<8, i8>, [1, 2, 3, 4, 5])) 
+        // (let ((x: i8, 3), (y: vec<i8, 8>, [1, 2, 3, 4, 5]))
         //      (+ (broadcast x 8) y))
-        // TODO: type annotations
         let let_ = just(Token::Let)
             .ignore_then({
                 let binding = id
+                    .then(just(Token::Ctrl(':')).ignore_then(type_).or_not())
                     .then_ignore(just(Token::Ctrl(',')))
                     .then(expr.clone())
-                    .delimited_by(
-                        just(Token::Ctrl('(')),
-                        just(Token::Ctrl(')'))
-                    )
-                    .map(|(id, expr)| ((id, Box::new(expr))))
+                    .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
+                    .map(|((id, ty), expr)| Binding {
+                        id,
+                        type_hint: ty,
+                        expr: Box::new(expr),
+                    })
                     .labelled("binding");
 
                 binding
-                    .separated_by(just(Token::Ctrl(',')).recover_with(skip_then_retry_until(any().ignored(), one_of([Token::Ctrl(')'), Token::Ctrl('(')]).ignored())))
+                    .separated_by(just(Token::Ctrl(',')).recover_with(skip_then_retry_until(
+                        any().ignored(),
+                        one_of([Token::Ctrl(')'), Token::Ctrl('(')]).ignored(),
+                    )))
                     .collect::<Vec<_>>()
                     .map(Vec::into_boxed_slice)
-                    .delimited_by(
-                        just(Token::Ctrl('(')),
-                        just(Token::Ctrl(')'))
-                    )
+                    .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
             })
             .then(expr.clone())
             .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
             .map_with(|(binds, body), e| (Expr::Let(binds, Box::new(body)), e.span()));
 
-        atom.clone()
-            .or(if_)
-            .or(bop)
-            .or(let_)
-            .or(call)
+        atom.clone().or(if_).or(bop).or(let_).or(call)
     })
 }
