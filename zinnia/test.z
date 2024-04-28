@@ -1,1 +1,1 @@
-(+ (- (among [1, 2, 3, 4]) 7) (* (if (== true true) 7 4) (from (== 6 6))))
+(+ (- (among [1i1, 2u7, 3u8, 4i8]) 7) (* (if (== true true) -7i9 4) (from (== 6 6))))

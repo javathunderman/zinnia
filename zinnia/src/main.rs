@@ -8,7 +8,7 @@ pub type Span = SimpleSpan<usize>;
 enum Token<'src> {
     Bool(bool),
     NumF(f64),
-    NumI(i64),
+    NumI(bool, u64, Option<NSize>),
     // Do we want this?
     // Str(&'src str),
     Op(&'src str),
@@ -25,7 +25,15 @@ impl <'src> fmt::Display for Token<'src> {
         match self {
             Token::Bool(x) => write!(f, "{}", x),
             Token::NumF(n) => write!(f, "{}", n),
-            Token::NumI(n) => write!(f, "{}", n),
+            Token::NumI(s, n, sz) => {
+                write!(f, "{}{}", if *s { "-" } else { "" }, n)?;
+
+                if let Some(sz) = sz {
+                    write!(f, "{}{}", if sz.sign { 'i' } else { 'u' }, sz.width)?
+                }
+
+                Ok(())
+            },
             Token::Op(s) => write!(f, "{}", s),
             Token::Ctrl(c) => write!(f, "{}", c),
             Token::Ident(s) => write!(f, "{}", s),
@@ -36,10 +44,16 @@ impl <'src> fmt::Display for Token<'src> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+struct NSize {
+    sign: bool,
+    width: i8
+}
+
+#[derive(Clone, Debug, PartialEq)]
 enum Prim {
     Bool(bool),
     NumF(f64),
-    NumI(i64),
+    NumI(Option<NSize>, bool, u64),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -143,13 +157,22 @@ fn lexer<'src>(
         .unwrapped()
         .map(Token::NumF);
 
-    let int_num = just('-')
-        .or_not()
-        .then(text::int(10))
-        .to_slice()
-        .from_str()
-        .unwrapped()
-        .map(Token::NumI);
+    let int_num = { 
+        let int_lit = just('-')
+            .or_not()
+            .then(text::int(10));
+
+        let type_ = one_of(['u', 'i']).then(text::int(10).to_slice().from_str::<i8>().unwrapped());
+
+        int_lit.then(type_.or_not())
+            .map(|((sign, digits), ty): ((_, &str), _)| {
+                Token::NumI(
+                    sign.is_some(),
+                    digits.parse().unwrap(),
+                    ty.map(|(sign_char, width)| NSize { sign: sign_char == 'i', width })
+                )
+           })
+    };
 
     let ctrl = one_of("()[],").map(Token::Ctrl);
 
@@ -199,7 +222,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
         let prim = select! {
             Token::Bool(x) => Value::Prim(Prim::Bool(x)),
             Token::NumF(n) => Value::Prim(Prim::NumF(n)),
-            Token::NumI(n) => Value::Prim(Prim::NumI(n)),
+            Token::NumI(sign, n, size) => Value::Prim(Prim::NumI(size, sign, n)),
         }
         .labelled("prim");
 
