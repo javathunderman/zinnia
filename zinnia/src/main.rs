@@ -1,9 +1,13 @@
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::prelude::*;
+use ir::Direction;
 use std::{collections::HashMap, env, fmt::{self, Display}, fs};
 use calyx_ir as ir;
+use calyx_ir::structure;
+use calyx_frontend as frontend;
 use std::collections::HashSet;
 pub type Span = SimpleSpan<usize>;
+use std::io::Write;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Token<'src> {
@@ -113,12 +117,53 @@ fn main() {
         let mut main_component = ir::Component::new("main", main_component_ports, false, false, None);
         main_component.attributes.insert(ir::BoolAttr::TopLevel, 1);
         let mut main_library_sig = ir::LibrarySignatures::default();
-        let mut calyx_builder = ir::Builder::new(&mut main_component, &main_library_sig);
 
+        // let path: std::path::PathBuf = "/home/arjun/coursecode/cmsc838l/verilog-tests/min_example.futil".into();
+        let lib_path: std::path::PathBuf = "/home/arjun/coursecode/838l-build-chain/calyx/primitives/core.futil".into();
+        // main_library_sig.mark_extern_source(path);
+        let mut calyx_builder = ir::Builder::new(&mut main_component, &main_library_sig);
+        let ws = frontend::Workspace::from_compile_lib()?;
+        // ws.components.push(main_component);
+        let main: frontend::ast::ComponentDef = frontend::ast::ComponentDef::new(ir::Id::new("main"), false, None, vec![]);
+        // let write_en_port = ir::PortDef::new("write_en", 1, ir::Direction::Input, ir::Attributes::default());
+        // let std_reg_prim = ir::Primitive{
+        //     name: ir::Id::new("std_reg"),
+        //     params: vec!["WIDTH"],
+        //     signature: vec![write_en_port],
+        //     attributes: ir::Attributes::default(),
+        //     is_comb: false,
+        //     latency: None,
+        //     body: None
+        // };
+        ws.lib.add_extern_primitive(lib_path, std_reg_prim);
+        let mut ctx = ir::from_ast::ast_to_ir(ws);
+        // Convert it into an ir::Context
+        // let mut ctx = ir::from_ast::ast_to_ir(ws).unwrap();
+        // structure!(calyx_builder;
+        //     let signal_on = constant(1, 32); // Define 32-bit constant 1.
+        //     let fsm_reg = prim std_reg(32);  // Define 32-bit register.
+        // );
+        // ctx.components.insert(0, main_component);
+        // let mut calyx_builder = ir::Builder::new(&mut build_context.components.first().unwrap(), &build_context.lib);
         match ast {
             Some(success_parsed) => memory_gen(success_parsed, &mut calyx_builder),
             None => println!("Lexer/parser error")
         };
+        // let build_context = ir::Context {
+        //     components: vec![main_component],
+        //     lib : main_library_sig,
+        //     entrypoint: ir::Id::new("main"),
+        //     bc: ir::BackendConf::default(),
+        //     extra_opts: vec![],
+        //     metadata: None
+        // };
+        let out = &mut std::io::stdout();
+
+        for comp in &ctx.components {
+            println!("component");
+            ir::Printer::write_component(comp, out);
+            writeln!(out);
+        }
 
         // we'd eval here, if ast is Some
         parse_errs
