@@ -1,7 +1,8 @@
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::prelude::*;
 use std::{collections::HashMap, env, fmt::{self, Display}, fs};
-
+use calyx_ir as ir;
+use std::collections::HashSet;
 pub type Span = SimpleSpan<usize>;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -106,8 +107,18 @@ fn main() {
             .map_with(|ast, e| (ast, e.span()))
             .parse(tokens.as_slice().spanned((src.len()..src.len()).into()))
             .into_output_errors();
+        let mut main_component_ports: Vec<ir::PortDef<u64>> = vec![];
 
-        dbg!(ast);
+        // port width for components is fixed at u64, according to Calyx IR crate docs
+        let mut main_component = ir::Component::new("main", main_component_ports, false, false, None);
+        main_component.attributes.insert(ir::BoolAttr::TopLevel, 1);
+        let mut main_library_sig = ir::LibrarySignatures::default();
+        let mut calyx_builder = ir::Builder::new(&mut main_component, &main_library_sig);
+
+        match ast {
+            Some(success_parsed) => memory_gen(success_parsed, &mut calyx_builder),
+            None => println!("Lexer/parser error")
+        };
 
         // we'd eval here, if ast is Some
         parse_errs
@@ -162,7 +173,7 @@ fn lexer<'src>(
         .unwrapped()
         .map(Token::NumF);
 
-    let int_num = { 
+    let int_num = {
         let int_lit = just('-')
             .or_not()
             .then(text::int(10));
@@ -294,7 +305,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                 ), e.span())
             });
 
-        let call = 
+        let call =
             expr.clone().then(expr.clone().repeated().at_least(1).collect::<Vec<_>>().map_with(|args, e| (args, e.span())))
             .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
             .map_with(|(fn_, args), e| {
@@ -306,7 +317,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
 
 
         // e.g.
-        // (let ((x: i8, 3), (y: vec<8, i8>, [1, 2, 3, 4, 5])) 
+        // (let ((x: i8, 3), (y: vec<8, i8>, [1, 2, 3, 4, 5]))
         //      (+ (broadcast x 8) y))
         // TODO: type annotations
         let let_ = just(Token::Let)
@@ -340,4 +351,50 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
             .or(let_)
             .or(call)
     })
+}
+
+fn memory_gen(ast: ((Expr, SimpleSpan), SimpleSpan), builder: &mut ir::Builder) {
+    let ((parsed_expr, _), _) = ast;
+    let mut binding_lst: HashSet<&str> = HashSet::new();
+    match parsed_expr {
+        Expr::Value(val) => memory_gen_value(val, builder),
+        _ => println!("Unimplemented")
+    };
+}
+
+fn memory_gen_value(prim_val: Value, builder: &mut ir::Builder) {
+    match prim_val {
+        Value::Prim(p) => memory_gen_prim(p, builder),
+        _ => println!("Unimplemented")
+    }
+}
+
+fn memory_gen_prim(prim_val: Prim, builder: &mut ir::Builder) {
+    match prim_val {
+        Prim::NumI(size_opt, signed, int_val) => {
+            match size_opt {
+                Some(size) => {
+                    if signed {
+                        builder.add_primitive("fsm", "std_reg", &vec![size.width as u64]);
+                    } else {
+                        builder.add_primitive("fsm", "std_reg", &vec![size.width as u64]);
+                    }
+                },
+                None => {
+                    if signed {
+                        builder.add_primitive("fsm", "std_reg", &vec![8]);
+                    } else {
+                        builder.add_primitive("fsm", "std_reg", &vec![8]);
+                    }
+                }
+            }
+
+        },
+        Prim::Bool(b_val) => {
+            builder.add_primitive("fsm", "std_reg", &vec![1]);
+        },
+        Prim::NumF(f_val) => {
+            builder.add_primitive("fsm", "std_reg", &vec![64]);
+        }
+    }
 }
