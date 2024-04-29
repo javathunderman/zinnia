@@ -1,9 +1,7 @@
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::prelude::*;
-use ir::Direction;
-use std::{collections::HashMap, env, fmt::{self, Display}, fs};
+use std::{collections::HashMap, env, error::Error, fmt::{self, Display}, fs};
 use calyx_ir as ir;
-use calyx_ir::structure;
 use calyx_frontend as frontend;
 use std::collections::HashSet;
 pub type Span = SimpleSpan<usize>;
@@ -111,57 +109,37 @@ fn main() {
             .map_with(|ast, e| (ast, e.span()))
             .parse(tokens.as_slice().spanned((src.len()..src.len()).into()))
             .into_output_errors();
-        let mut main_component_ports: Vec<ir::PortDef<u64>> = vec![];
 
-        // port width for components is fixed at u64, according to Calyx IR crate docs
-        let mut main_component = ir::Component::new("main", main_component_ports, false, false, None);
-        main_component.attributes.insert(ir::BoolAttr::TopLevel, 1);
-        let mut main_library_sig = ir::LibrarySignatures::default();
+        let ctx = match emit(ast) {
+            Ok(v) => v,
+            Err(e) => {
+                // let (file, start, end) = unsafe { std::mem::transmute::<_,(&str, usize, usize)>(e.location()) };
+                let (file, start, end) = {
+                    let (file, start, end) = e.location();
 
-        // let path: std::path::PathBuf = "/home/arjun/coursecode/cmsc838l/verilog-tests/min_example.futil".into();
-        let lib_path: std::path::PathBuf = "/home/arjun/coursecode/838l-build-chain/calyx/primitives/core.futil".into();
-        // main_library_sig.mark_extern_source(path);
-        let mut calyx_builder = ir::Builder::new(&mut main_component, &main_library_sig);
-        let ws = frontend::Workspace::from_compile_lib()?;
-        // ws.components.push(main_component);
-        let main: frontend::ast::ComponentDef = frontend::ast::ComponentDef::new(ir::Id::new("main"), false, None, vec![]);
-        // let write_en_port = ir::PortDef::new("write_en", 1, ir::Direction::Input, ir::Attributes::default());
-        // let std_reg_prim = ir::Primitive{
-        //     name: ir::Id::new("std_reg"),
-        //     params: vec!["WIDTH"],
-        //     signature: vec![write_en_port],
-        //     attributes: ir::Attributes::default(),
-        //     is_comb: false,
-        //     latency: None,
-        //     body: None
-        // };
-        ws.lib.add_extern_primitive(lib_path, std_reg_prim);
-        let mut ctx = ir::from_ast::ast_to_ir(ws);
-        // Convert it into an ir::Context
-        // let mut ctx = ir::from_ast::ast_to_ir(ws).unwrap();
-        // structure!(calyx_builder;
-        //     let signal_on = constant(1, 32); // Define 32-bit constant 1.
-        //     let fsm_reg = prim std_reg(32);  // Define 32-bit register.
-        // );
-        // ctx.components.insert(0, main_component);
-        // let mut calyx_builder = ir::Builder::new(&mut build_context.components.first().unwrap(), &build_context.lib);
-        match ast {
-            Some(success_parsed) => memory_gen(success_parsed, &mut calyx_builder),
-            None => println!("Lexer/parser error")
+                    (file.to_owned(), start, end)
+
+                };
+
+                Report::build(ReportKind::Error, file.clone(), start)
+                    .with_message(e.message())
+                    .with_label(
+                        Label::new((file.clone(), start..end))
+                            .with_message(e.message())
+                            .with_color(Color::Red)
+                    )
+                    .finish()
+                    .print(sources([(file.clone(), &src)]))
+                    .expect("stdout io err");
+
+                return;
+            }
         };
-        // let build_context = ir::Context {
-        //     components: vec![main_component],
-        //     lib : main_library_sig,
-        //     entrypoint: ir::Id::new("main"),
-        //     bc: ir::BackendConf::default(),
-        //     extra_opts: vec![],
-        //     metadata: None
-        // };
+
         let out = &mut std::io::stdout();
 
         for comp in &ctx.components {
-            println!("component");
-            ir::Printer::write_component(comp, out);
+            ir::Printer::write_component(comp, out).expect("stdout io err");
             writeln!(out);
         }
 
@@ -195,6 +173,22 @@ fn main() {
                 .print(sources([(filename.clone(), src.clone())]))
                 .unwrap()
         });
+}
+
+fn emit(ast: Option<((Expr<'_>, SimpleSpan), SimpleSpan)>) -> Result<ir::Context, calyx_utils::Error> {
+    let mut ws = frontend::Workspace::from_compile_lib()?;
+    let main: frontend::ast::ComponentDef = frontend::ast::ComponentDef::new(ir::Id::new("main"), false, None, vec![]);
+    ws.components.push(main);
+
+    let mut ctx = ir::from_ast::ast_to_ir(ws)?;
+    let main_component = &mut ctx.components[0];
+    let mut calyx_builder = ir::Builder::new(main_component, &ctx.lib);
+
+    match ast {
+        Some(success_parsed) => memory_gen(success_parsed, &mut calyx_builder),
+        None => println!("Lexer/parser error")
+    };
+    Ok(ctx)
 }
 
 fn lexer<'src>(
