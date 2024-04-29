@@ -62,7 +62,7 @@ impl fmt::Display for NType {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Type<'a> {
-    NType(NType),
+    Num(NType),
     Vec(NType, u8),
     Ident(&'a str, Vec<Spanned<Type<'a>>>),
 }
@@ -348,7 +348,7 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                 });
 
             let nt = select! {
-                Token::NType(ty) => Type::NType(ty)
+                Token::NType(ty) => Type::Num(ty)
             }
             .map_with(|x, e| (x, e.span()));
 
@@ -362,11 +362,29 @@ fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                     .then_ignore(just(Token::Ctrl(',')))
                     .then(
                         select! {
-                          Token::NumI(false, val, None) => val
+                          Token::NumI(sign, val, ty) => (sign, val, ty)
                         }
-                        .filter(|x| 0 < *x && *x < 256)
-                        .labelled("size (0-255)")
-                        .map(|x| x as u8),
+                        .labelled("size").as_context()
+                        .try_map(|(sign, val, ty), span| {
+                            if sign {
+                                return Err(Rich::custom(
+                                    span,
+                                    format!(
+                                        "Given vector size -{} but vector size cannot be negative!",
+                                        val
+                                    ),
+                                ));
+                            }
+
+                            if ty.is_some() {
+                                return Err(Rich::custom(span, "Vector size should not be given an explicit type!"))
+                            }
+
+                            u8::try_from(val).map_err(|e| {
+                                Rich::custom(span, format!("Invalid vector size {}! {}", val, e))
+                            })
+                        })
+                        .map_err(|e| dbg!(e))
                     )
                     .delimited_by(just(Token::Op("<")), just(Token::Op(">"))),
                 )
