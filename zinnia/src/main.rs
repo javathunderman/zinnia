@@ -90,12 +90,12 @@ enum Expr<'src> {
     Let(Box<[(&'src str, Box<Spanned<Self>>)]>, Box<Spanned<Self>>)
 }
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     let mut args = std::env::args();
 
     if args.len() < 2 {
         println!("Usage: [cargo run] FILE");
-        return;
+        return Ok(());
     }
 
     let filename = args.nth(1).unwrap();
@@ -113,7 +113,6 @@ fn main() {
         let ctx = match emit(ast) {
             Ok(v) => v,
             Err(e) => {
-                // let (file, start, end) = unsafe { std::mem::transmute::<_,(&str, usize, usize)>(e.location()) };
                 let (file, start, end) = {
                     let (file, start, end) = e.location();
 
@@ -132,7 +131,7 @@ fn main() {
                     .print(sources([(file.clone(), &src)]))
                     .expect("stdout io err");
 
-                return;
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"));
             }
         };
 
@@ -173,6 +172,8 @@ fn main() {
                 .print(sources([(filename.clone(), src.clone())]))
                 .unwrap()
         });
+
+    Ok(())
 }
 
 fn emit(ast: Option<((Expr<'_>, SimpleSpan), SimpleSpan)>) -> Result<ir::Context, calyx_utils::Error> {
