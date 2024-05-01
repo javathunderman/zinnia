@@ -44,11 +44,17 @@ impl<'src> fmt::Display for Token<'src> {
     }
 }
 
+pub struct Decl {
+    pub id: String,
+    pub expr: Spanned<Expr>,
+    pub ty: Spanned<Type>,
+}
+
 // A numeric type
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NType {
     pub sign: bool,
-    pub width: i8,
+    pub width: u8,
 }
 
 impl fmt::Display for NType {
@@ -58,10 +64,29 @@ impl fmt::Display for NType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Type<'a> {
+pub struct VecT{ pub elem_t: NType, pub count: u8 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Type {
     Num(NType),
-    Vec(NType, u8),
-    Ident(&'a str, Vec<Spanned<Type<'a>>>),
+    VecT(VecT),
+    // Ident(&'a str, Vec<Spanned<Type<'a>>>),
+    Arrow(Vec<Spanned<Type>>, Box<Spanned<Type>>),
+    Unit,
+    Unsolved(Unsolved),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnsolvedNum{ pub sign: bool, pub min_size: u8 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnsolvedVec{ pub sign: bool, pub min_size: u8 }
+
+// TODO: more spans?
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Unsolved {
+    UnsolvedNum(UnsolvedNum),
+    UnsolvedVec(UnsolvedVec),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -74,7 +99,7 @@ pub enum Prim {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Prim(Prim),
-    Vec(Box<[Value]>), // Func(&'src str),
+    Vec(Box<[Spanned<Prim>]>), // Func(&'src str),
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -92,18 +117,18 @@ pub enum BinaryOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct Binding<'a> {
-    pub id: &'a str,
-    pub type_hint: Option<Spanned<Type<'a>>>,
-    pub expr: Box<Spanned<Expr<'a>>>,
+pub struct Binding {
+    pub id: String,
+    pub type_hint: Option<Spanned<Type>>,
+    pub expr: Box<Spanned<Expr>>,
 }
 
 #[derive(Debug, Clone)]
-pub enum Expr<'src> {
-    Id(&'src str),
+pub enum Expr {
+    Id(String),
     Value(Value),
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
     Call(Box<Spanned<Self>>, Spanned<Vec<Spanned<Self>>>),
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
-    Let(Box<[Binding<'src>]>, Box<Spanned<Self>>),
+    Let(Box<[Binding]>, Box<Spanned<Self>>),
 }

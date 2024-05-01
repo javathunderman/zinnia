@@ -1,6 +1,7 @@
 mod ast;
 mod parse;
 mod emit;
+// mod types;
 
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use chumsky::prelude::*;
@@ -14,7 +15,8 @@ pub type Span = SimpleSpan<usize>;
 
 pub type Spanned<T> = (T, Span);
 
-pub type ParserInput<'tokens, 'src> = chumsky::input::SpannedInput<Token<'src>, Span, &'tokens [(Token<'src>, Span)]>;
+pub type ParserInput<'tokens, 'src> =
+    chumsky::input::SpannedInput<Token<'src>, Span, &'tokens [(Token<'src>, Span)]>;
 
 fn main() -> Result<(), std::io::Error> {
     let mut args = std::env::args();

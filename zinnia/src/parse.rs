@@ -1,5 +1,9 @@
-use chumsky::prelude::*;
 use crate::{ast::*, ParserInput, Span, Spanned};
+use chumsky::prelude::*;
+
+use self::VecT;
+
+// use self::Vec;
 
 pub fn lexer<'src>(
 ) -> impl Parser<'src, &'src str, Vec<(Token<'src>, Span)>, extra::Err<Rich<'src, char, Span>>> {
@@ -23,7 +27,7 @@ pub fn lexer<'src>(
         .map(Token::NumF);
 
     let num_t = one_of(['u', 'i'])
-        .then(text::int(10).to_slice().from_str::<i8>().unwrapped())
+        .then(text::int(10).to_slice().from_str::<u8>().unwrapped())
         .map(|(sign, width)| NType {
             sign: sign == 'i',
             width,
@@ -78,18 +82,19 @@ pub fn lexer<'src>(
 pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
     'tokens,
     ParserInput<'tokens, 'src>,
-    Spanned<Expr<'src>>,
+    Spanned<Expr>,
     extra::Err<Rich<'tokens, Token<'src>, Span>>,
 > + Clone {
     recursive(|expr| {
         let prim = select! {
-            Token::Bool(x) => Value::Prim(Prim::Bool(x)),
-            Token::NumF(n) => Value::Prim(Prim::NumF(n)),
-            Token::NumI(sign, n, size) => Value::Prim(Prim::NumI(size, sign, n)),
+            Token::Bool(x) => Prim::Bool(x),
+            Token::NumF(n) => Prim::NumF(n),
+            Token::NumI(sign, n, size) => Prim::NumI(size, sign, n),
         }
         .labelled("prim");
 
         let vec = prim
+            .map_with(|x, e| (x, e.span()))
             .separated_by(just(Token::Ctrl(',')).recover_with(skip_then_retry_until(
                 any().ignored(),
                 one_of([Token::Ctrl(','), Token::Ctrl(']')]).ignored(),
@@ -110,10 +115,10 @@ pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
         }
         .labelled("identifier");
 
-        let val = prim.or(vec).map(Expr::Value);
+        let val = prim.map(Value::Prim).or(vec).map(Expr::Value);
 
         let atom = val
-            .or(id.map(Expr::Id))
+            .or(id.map(&str::to_string).map(Expr::Id))
             .map_with(|expr, e| (expr, e.span()));
 
         let if_ = just(Token::If)
@@ -161,18 +166,18 @@ pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
             .map_with(|(fn_, args), e| (Expr::Call(Box::new(fn_), args), e.span()));
 
         let type_ = recursive(|type_| {
-            let generic = id
-                .then(
-                    type_
-                        .separated_by(just(Token::Ctrl(',')))
-                        .at_least(1)
-                        .collect::<Vec<_>>()
-                        .delimited_by(just(Token::Op("<")), just(Token::Op(">")))
-                        .or_not(),
-                )
-                .map_with(|(id, args), e| {
-                    (Type::Ident(id, args.unwrap_or_else(Vec::new)), e.span())
-                });
+            // let generic = id
+            //     .then(
+            //         type_
+            //             .separated_by(just(Token::Ctrl(',')))
+            //             .at_least(1)
+            //             .collect::<Vec<_>>()
+            //             .delimited_by(just(Token::Op("<")), just(Token::Op(">")))
+            //             .or_not(),
+            //     )
+            //     .map_with(|(id, args), e| {
+            //         (Type::Ident(id, args.unwrap_or_else(Vec::new)), e.span())
+            //     });
 
             let nt = select! {
                 Token::NType(ty) => Type::Num(ty)
@@ -191,7 +196,8 @@ pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                         select! {
                           Token::NumI(sign, val, ty) => (sign, val, ty)
                         }
-                        .labelled("size").as_context()
+                        .labelled("size")
+                        .as_context()
                         .try_map(|(sign, val, ty), span| {
                             if sign {
                                 return Err(Rich::custom(
@@ -204,20 +210,23 @@ pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                             }
 
                             if ty.is_some() {
-                                return Err(Rich::custom(span, "Vector size should not be given an explicit type!"))
+                                return Err(Rich::custom(
+                                    span,
+                                    "Vector size should not be given an explicit type!",
+                                ));
                             }
 
                             u8::try_from(val).map_err(|e| {
                                 Rich::custom(span, format!("Invalid vector size {}! {}", val, e))
                             })
                         })
-                        .map_err(|e| dbg!(e))
+                        .map_err(|e| dbg!(e)),
                     )
                     .delimited_by(just(Token::Op("<")), just(Token::Op(">"))),
                 )
-                .map_with(|(num_t, count), e| (Type::Vec(num_t, count), e.span()));
+                .map_with(|(elem_t, count), e| (Type::VecT(VecT { elem_t, count }), e.span()));
 
-            nt.or(vec_t).or(generic)
+            nt.or(vec_t) // .or(generic)
         });
 
         // e.g.
@@ -231,7 +240,7 @@ pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                     .then(expr.clone())
                     .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
                     .map(|((id, ty), expr)| Binding {
-                        id,
+                        id: id.to_string(),
                         type_hint: ty,
                         expr: Box::new(expr),
                     })

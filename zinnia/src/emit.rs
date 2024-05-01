@@ -4,9 +4,9 @@ use chumsky::span::SimpleSpan;
 use std::collections::HashSet;
 use serde_json::json;
 
-use crate::ast::*;
+use crate::{ast::*, Spanned};
 
-pub fn emit(ast: Option<((Expr<'_>, SimpleSpan), SimpleSpan)>) -> Result<ir::Context, calyx_utils::Error> {
+pub fn emit(ast: Option<((Expr, SimpleSpan), SimpleSpan)>) -> Result<ir::Context, calyx_utils::Error> {
     let mut ws = frontend::Workspace::from_compile_lib()?;
     let mut ns:frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("../../838l-build-chain/calyx/primitives/memories/comb.futil".into()))?;
     let (_, externs) = ns.externs.pop().unwrap();
@@ -42,18 +42,15 @@ fn memory_gen(ast: ((Expr, SimpleSpan), SimpleSpan), builder: &mut ir::Builder) 
 fn memory_gen_value(prim_val: Value, builder: &mut ir::Builder) {
     match prim_val {
         Value::Prim(p) => memory_gen_prim(p, builder),
-        Value::Vec(lst) => memory_gen_vector(lst, builder),
-        _ => println!("Unimplemented")
+        Value::Vec(lst) => memory_gen_vector(lst.as_ref(), builder),
     }
 }
 
-fn memory_gen_vector(lst: Box<[Value]>, builder: &mut ir::Builder) {
+fn memory_gen_vector(lst: &[Spanned<Prim>], builder: &mut ir::Builder) {
     let mut data_vals: Vec<i64> = vec![];
-    let mut max_width: i8 = 0;
+    let mut max_width: u8 = 0;
     let mut is_signed_number = false;
-    for val in lst.iter() {
-        match val {
-            Value::Prim(exp) => {
+    for (exp, _) in lst.iter() {
                 match exp {
                     Prim::NumI(size_opt, signed_val, unsigned_int_val) => {
                             let n_size = size_opt.as_ref().unwrap_or_else(|| &NType {sign: false, width: 0});
@@ -80,13 +77,12 @@ fn memory_gen_vector(lst: Box<[Value]>, builder: &mut ir::Builder) {
                         }
                     }
                 }
-            },
-            _ => println!("Vector compilation only currently possible with primitives")
-       }
     }
+
     if max_width == 0 {
         max_width = 8;
     }
+
     let data_file = json!({
         "mem":
         {
