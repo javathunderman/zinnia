@@ -53,7 +53,7 @@ fn memory_gen_vector(lst: &[Spanned<Prim>], builder: &mut ir::Builder) {
     for (exp, _) in lst.iter() {
                 match exp {
                     Prim::NumI(size_opt, signed_val, unsigned_int_val) => {
-                            let n_size = size_opt.as_ref().unwrap_or_else(|| &NType {sign: false, width: 0});
+                            let n_size = size_opt.as_ref().unwrap_or(&NType {sign: false, width: 0});
                             if n_size.sign && !is_signed_number {
                                 is_signed_number = true;
                             }
@@ -62,7 +62,7 @@ fn memory_gen_vector(lst: &[Spanned<Prim>], builder: &mut ir::Builder) {
                             }
                             let int_val = *unsigned_int_val as i64;
                             if *signed_val {
-                                data_vals.push(-1 * int_val);
+                                data_vals.push(-int_val);
                             } else {
                                 data_vals.push(int_val);
                             }
@@ -95,7 +95,7 @@ fn memory_gen_vector(lst: &[Spanned<Prim>], builder: &mut ir::Builder) {
         }
     });
     dbg!(data_file.to_string());
-    builder.add_primitive("fsm", "comb_mem_d1", &vec![max_width as u64, lst.len() as u64, max_width.ilog2() as u64]);
+    builder.add_primitive("fsm", "comb_mem_d1", &[max_width as u64, lst.len() as u64, max_width.ilog2() as u64]);
 }
 
 // TODO: generate assignments after register allocation
@@ -105,23 +105,23 @@ fn memory_gen_prim(prim_val: Prim, builder: &mut ir::Builder) {
             match size_opt {
                 Some(size) => {
                     if signed {
-                        builder.add_primitive("fsm", "std_reg", &vec![size.width as u64]);
+                        builder.add_primitive("fsm", "std_reg", &[size.width as u64]);
                     } else {
-                        builder.add_primitive("fsm", "std_reg", &vec![size.width as u64]);
+                        builder.add_primitive("fsm", "std_reg", &[size.width as u64]);
                     }
                 },
                 None => {
                     if signed {
-                        builder.add_primitive("fsm", "std_reg", &vec![8]);
+                        builder.add_primitive("fsm", "std_reg", &[8]);
                     } else {
-                        builder.add_primitive("fsm", "std_reg", &vec![8]);
+                        builder.add_primitive("fsm", "std_reg", &[8]);
                     }
                 }
             }
 
         },
         Prim::Bool(_b_val) => {
-            builder.add_primitive("fsm", "std_reg", &vec![1]);
+            builder.add_primitive("fsm", "std_reg", &[1]);
         },
         Prim::NumF(_f_val) => println!("Float compilation as primitive is unimplemented")
     }
