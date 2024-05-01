@@ -1,7 +1,7 @@
 use calyx_ir as ir;
 use calyx_frontend as frontend;
 use chumsky::span::SimpleSpan;
-use std::collections::HashSet;
+use std::{cell::RefCell, collections::HashMap, rc::Rc, thread::scope};
 use serde_json::json;
 
 use crate::{ast::*, Spanned};
@@ -21,32 +21,49 @@ pub fn emit(ast: Option<((Expr, SimpleSpan), SimpleSpan)>) -> Result<ir::Context
         ctx.lib.add_extern_primitive("../memories/comb.futil".into(), ext);
     }
     let mut calyx_builder = ir::Builder::new(main_component, &ctx.lib);
-
+    let mut binding_map : HashMap<String, Rc<RefCell<ir::Cell>>> = HashMap::new();
     match ast {
-        Some(success_parsed) => memory_gen(success_parsed, &mut calyx_builder),
-        None => println!("Lexer/parser error")
+        Some(success_parsed) => {
+            memory_gen(&success_parsed.0, &mut calyx_builder, &mut binding_map);
+            return Ok(ctx)
+        },
+        None => panic!("Lexer/parser error")
     };
-    Ok(ctx)
+
 }
 
-fn memory_gen(ast: ((Expr, SimpleSpan), SimpleSpan), builder: &mut ir::Builder) {
-    let ((parsed_expr, _), _) = ast;
-    let mut binding_lst: HashSet<&str> = HashSet::new();
+fn memory_gen(ast: &(Expr, SimpleSpan), builder: &mut ir::Builder, binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>) -> Option<Rc<RefCell<ir::Cell>>> {
+    let (parsed_expr, _) = ast;
     match parsed_expr {
-        Expr::Value(val) => memory_gen_value(val, builder),
-        _ => println!("Unimplemented")
-    };
-}
+        Expr::Value(val) => memory_gen_value(val.clone(), builder),
+        Expr::Let(binding_lst, rem_expr) => {
+            for binding_obj in binding_lst.iter() {
+                if !binding_map.contains_key(&binding_obj.id) {
+                    /* Compile the terms in the let scope */
+                    let result_cell = memory_gen(binding_obj.expr.as_ref(), builder, binding_map);
+                    binding_map.insert(binding_obj.id.clone(), result_cell.unwrap());
+                } else {
+                    panic!("ID in let binding has been reused");
+                }
+            }
+            /* Compile terms outside of the let scope */
+            dbg!(&binding_map);
+            memory_gen(rem_expr, builder, binding_map)
+        },
+        _ => None
 
-// note to self: 'sign' bool in NType refers to the int type (either i64 or u64), 'signed' bool on the NumI refers to whether it should be negative
-fn memory_gen_value(prim_val: Value, builder: &mut ir::Builder) {
-    match prim_val {
-        Value::Prim(p) => memory_gen_prim(p, builder),
-        Value::Vec(lst) => memory_gen_vector(lst.as_ref(), builder),
     }
 }
 
-fn memory_gen_vector(lst: &[Spanned<Prim>], builder: &mut ir::Builder) {
+// note to self: 'sign' bool in NType refers to the int type (either i64 or u64), 'signed' bool on the NumI refers to whether it should be negative
+fn memory_gen_value(prim_val: Value, builder: &mut ir::Builder) -> Option<Rc<RefCell<ir::Cell>>> {
+    match prim_val {
+        Value::Prim(p) => memory_gen_prim(p, builder),
+        Value::Vec(lst) => memory_gen_vector(lst.as_ref(), builder)
+    }
+}
+
+fn memory_gen_vector(lst: &[Spanned<Prim>], builder: &mut ir::Builder) -> Option<Rc<RefCell<ir::Cell>>> {
     let mut data_vals: Vec<i64> = vec![];
     let mut max_width: u8 = 0;
     let mut is_signed_number = false;
@@ -95,34 +112,34 @@ fn memory_gen_vector(lst: &[Spanned<Prim>], builder: &mut ir::Builder) {
         }
     });
     dbg!(data_file.to_string());
-    builder.add_primitive("fsm", "comb_mem_d1", &[max_width as u64, lst.len() as u64, max_width.ilog2() as u64]);
+    let vec_component = builder.add_primitive("mem", "comb_mem_d1", &[max_width as u64, lst.len() as u64, max_width.ilog2() as u64]);
+    vec_component.borrow_mut().add_attribute(ir::BoolAttr::External, 1);
+    return Some(vec_component);
 }
 
 // TODO: generate assignments after register allocation
-fn memory_gen_prim(prim_val: Prim, builder: &mut ir::Builder) {
+fn memory_gen_prim(prim_val: Prim, builder: &mut ir::Builder) -> Option<Rc<RefCell<ir::Cell>>> {
     match prim_val {
         Prim::NumI(size_opt, signed, _int_val) => {
             match size_opt {
                 Some(size) => {
                     if signed {
-                        builder.add_primitive("fsm", "std_reg", &[size.width as u64]);
+                        Some(builder.add_primitive("reg", "std_reg", &[size.width as u64]))
                     } else {
-                        builder.add_primitive("fsm", "std_reg", &[size.width as u64]);
+                        Some(builder.add_primitive("reg", "std_reg", &[size.width as u64]))
                     }
                 },
                 None => {
                     if signed {
-                        builder.add_primitive("fsm", "std_reg", &[8]);
+                        Some(builder.add_primitive("reg", "std_reg", &[8]))
                     } else {
-                        builder.add_primitive("fsm", "std_reg", &[8]);
+                        Some(builder.add_primitive("reg", "std_reg", &[8]))
                     }
                 }
             }
 
         },
-        Prim::Bool(_b_val) => {
-            builder.add_primitive("fsm", "std_reg", &[1]);
-        },
-        Prim::NumF(_f_val) => println!("Float compilation as primitive is unimplemented")
+        Prim::Bool(_b_val) => Some(builder.add_primitive("reg", "std_reg", &[1])),
+        Prim::NumF(_f_val) => Some(builder.add_primitive("reg", "std_reg", &[8])) // Warning: floats are not preserved in compilation
     }
 }
