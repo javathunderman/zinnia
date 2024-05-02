@@ -1,7 +1,10 @@
 use calyx_ir as ir;
 use calyx_ir::{structure};
 use calyx_frontend as frontend;
+use chumsky::primitive::group;
 use chumsky::span::SimpleSpan;
+use std::fmt::Binary;
+use std::result;
 use std::{cell::RefCell, collections::HashMap, rc::Rc, thread::scope};
 use serde_json::json;
 
@@ -48,9 +51,33 @@ fn memory_gen(ast: &(Expr, SimpleSpan), builder: &mut ir::Builder, binding_map: 
                 }
             }
             /* Compile terms outside of the let scope */
-            // dbg!(&binding_map);
             memory_gen(rem_expr, builder, binding_map)
         },
+        Expr::Binary(rem_expr_1, operator, rem_expr_2) => {
+            let operand1 = match &rem_expr_1.as_ref().0 {
+                Expr::Id(var_name) => binding_map.get(var_name).unwrap(),
+                _ => panic!("Cannot compile inlined expressions right now, use a let binding and create the var first")
+            };
+            let operand2 = match &rem_expr_2.as_ref().0 {
+                Expr::Id(var_name) => binding_map.get(var_name).unwrap(),
+                _ => panic!("Cannot compile inlined expressions right now, use a let binding and create the var first")
+            };
+            match operator {
+                // TODO: Schedule load/adds/writeout
+                BinaryOp::Add => {
+                    let size = operand1.borrow().get_parameter("WIDTH").unwrap();
+                    let adder_prim = builder.add_primitive("adder", "std_add", &[size]);
+                    let adder_res = builder.add_primitive("res_adder", "std_reg", &[size]);
+                    memory_gen_assignment(builder, None, size, &adder_res, Some(&adder_prim));
+                    build_wire_assignments_comb(builder, &adder_prim, &operand1, &operand2, "adder_action");
+                    Some(adder_res)
+                },
+                _ => {
+                    println!("Unimplemented binop");
+                    None
+                }
+            }
+        }
         _ => None
 
     }
@@ -121,7 +148,7 @@ fn memory_gen_vector(lst: &[Spanned<Prim>], builder: &mut ir::Builder) -> Option
 // TODO: generate assignments after register allocation
 fn memory_gen_prim(prim_val: Prim, builder: &mut ir::Builder, binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>) -> Option<Rc<RefCell<ir::Cell>>> {
     match prim_val {
-        Prim::NumI(size_opt, signed, _int_val) => {
+        Prim::NumI(size_opt, signed, int_val) => {
             match size_opt {
                 Some(size) => {
                     // TODO: Figure out how to handle signed ints since constant! takes u64s
@@ -130,7 +157,7 @@ fn memory_gen_prim(prim_val: Prim, builder: &mut ir::Builder, binding_map: &mut 
                         Some(new_reg)
                     } else {
                         let new_reg = builder.add_primitive("reg", "std_reg", &[size.width as u64]);
-                        memory_gen_assignment(builder, _int_val, size.width as u64, &new_reg);
+                        memory_gen_assignment(builder, Some(int_val), size.width as u64, &new_reg, None);
                         Some(new_reg)
                     }
                 },
@@ -141,7 +168,7 @@ fn memory_gen_prim(prim_val: Prim, builder: &mut ir::Builder, binding_map: &mut 
                         Some(new_reg)
                     } else {
                         let new_reg = builder.add_primitive("reg", "std_reg", &[8]);
-                        memory_gen_assignment(builder, _int_val, 8u64, &new_reg);
+                        memory_gen_assignment(builder, Some(int_val), 8u64, &new_reg, None);
                         Some(new_reg)
                     }
                 }
@@ -153,13 +180,36 @@ fn memory_gen_prim(prim_val: Prim, builder: &mut ir::Builder, binding_map: &mut 
     }
 }
 
-fn memory_gen_assignment(builder: &mut ir::Builder, _int_val: u64, size: u64, new_reg: &Rc<RefCell<ir::Cell>>) {
+fn memory_gen_assignment(builder: &mut ir::Builder, int_val: Option<u64>, size: u64, new_reg: &Rc<RefCell<ir::Cell>>, src_reg_opt: Option<&Rc<RefCell<ir::Cell>>>) {
     // Constant signal
-    ir::structure!(builder;
-        let signal_on = constant(1, 1); // value, width
-        let value_const = constant(_int_val, size);
-    );
-    let new_group = builder.add_group("reg_assn");
+    if int_val.is_none() {
+        assert!(src_reg_opt.is_some());
+    } else {
+        assert!(src_reg_opt.is_none());
+    }
+    let mut assignment_label : String = new_reg.borrow().name().to_string();
+    match src_reg_opt {
+        Some(src_reg_raw) => {
+            structure!(builder;
+                let signal_on = constant(1, 1);
+            );
+            let value_load = src_reg_raw;
+            assignment_label.push_str("_reg_assn");
+            build_wire_assignments(builder, new_reg, &signal_on, value_load, &assignment_label);
+        },
+        None => {
+            structure!(builder;
+                let signal_on = constant(1, 1);
+                let value_load = constant(int_val.unwrap(), size);
+            );
+            assignment_label.push_str("_load");
+            build_wire_assignments(builder, new_reg, &signal_on, &value_load, &assignment_label);
+        }
+    };
+}
+
+fn build_wire_assignments(builder: &mut ir::Builder, new_reg: &Rc<RefCell<ir::Cell>>, signal_on: &Rc<RefCell<ir::Cell>>, value_load:&Rc<RefCell<ir::Cell>>, group_label: &str) {
+    let new_group = builder.add_group(group_label);
     let write_en_assn = builder.build_assignment(
         new_reg.borrow().get("write_en"),
         signal_on.borrow().get("out"),
@@ -167,7 +217,7 @@ fn memory_gen_assignment(builder: &mut ir::Builder, _int_val: u64, size: u64, ne
     );
     let value_load = builder.build_assignment(
         new_reg.borrow().get("in"),
-        value_const.borrow().get("out"),
+        value_load.borrow().get("out"),
         ir::Guard::True,
     );
     let done_signal = builder.build_assignment(
@@ -179,4 +229,22 @@ fn memory_gen_assignment(builder: &mut ir::Builder, _int_val: u64, size: u64, ne
     mut_new_group.assignments.push(write_en_assn);
     mut_new_group.assignments.push(value_load);
     mut_new_group.assignments.push(done_signal);
+}
+
+fn build_wire_assignments_comb(builder: &mut ir::Builder, new_reg: &Rc<RefCell<ir::Cell>>, left_value_load:&Rc<RefCell<ir::Cell>>, right_value_load: &Rc<RefCell<ir::Cell>>, group_label: &str) {
+    let new_group = builder.add_comb_group(group_label);
+    let left_value_load_assn = builder.build_assignment(
+        new_reg.borrow().get("left"),
+        left_value_load.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let right_value_load_assn = builder.build_assignment(
+        new_reg.borrow().get("right"),
+        right_value_load.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let mut mut_new_group = new_group.borrow_mut();
+    mut_new_group.assignments.push(left_value_load_assn);
+    mut_new_group.assignments.push(right_value_load_assn);
+
 }
