@@ -1,4 +1,5 @@
 use calyx_ir as ir;
+use calyx_ir::{structure};
 use calyx_frontend as frontend;
 use chumsky::span::SimpleSpan;
 use std::{cell::RefCell, collections::HashMap, rc::Rc, thread::scope};
@@ -35,7 +36,7 @@ pub fn emit(ast: Option<((Expr, SimpleSpan), SimpleSpan)>) -> Result<ir::Context
 fn memory_gen(ast: &(Expr, SimpleSpan), builder: &mut ir::Builder, binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>) -> Option<Rc<RefCell<ir::Cell>>> {
     let (parsed_expr, _) = ast;
     match parsed_expr {
-        Expr::Value(val) => memory_gen_value(val.clone(), builder),
+        Expr::Value(val) => memory_gen_value(val.clone(), builder, binding_map),
         Expr::Let(binding_lst, rem_expr) => {
             for binding_obj in binding_lst.iter() {
                 if !binding_map.contains_key(&binding_obj.id) {
@@ -47,7 +48,7 @@ fn memory_gen(ast: &(Expr, SimpleSpan), builder: &mut ir::Builder, binding_map: 
                 }
             }
             /* Compile terms outside of the let scope */
-            dbg!(&binding_map);
+            // dbg!(&binding_map);
             memory_gen(rem_expr, builder, binding_map)
         },
         _ => None
@@ -56,9 +57,9 @@ fn memory_gen(ast: &(Expr, SimpleSpan), builder: &mut ir::Builder, binding_map: 
 }
 
 // note to self: 'sign' bool in NType refers to the int type (either i64 or u64), 'signed' bool on the NumI refers to whether it should be negative
-fn memory_gen_value(prim_val: Value, builder: &mut ir::Builder) -> Option<Rc<RefCell<ir::Cell>>> {
+fn memory_gen_value(prim_val: Value, builder: &mut ir::Builder, binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>) -> Option<Rc<RefCell<ir::Cell>>> {
     match prim_val {
-        Value::Prim(p) => memory_gen_prim(p, builder),
+        Value::Prim(p) => memory_gen_prim(p, builder, binding_map),
         Value::Vec(lst) => memory_gen_vector(lst.as_ref(), builder)
     }
 }
@@ -68,32 +69,32 @@ fn memory_gen_vector(lst: &[Spanned<Prim>], builder: &mut ir::Builder) -> Option
     let mut max_width: u8 = 0;
     let mut is_signed_number = false;
     for (exp, _) in lst.iter() {
-                match exp {
-                    Prim::NumI(size_opt, signed_val, unsigned_int_val) => {
-                            let n_size = size_opt.as_ref().unwrap_or(&NType {sign: false, width: 0});
-                            if n_size.sign && !is_signed_number {
-                                is_signed_number = true;
-                            }
-                            if n_size.width > max_width {
-                                max_width = n_size.width;
-                            }
-                            let int_val = *unsigned_int_val as i64;
-                            if *signed_val {
-                                data_vals.push(-int_val);
-                            } else {
-                                data_vals.push(int_val);
-                            }
-                        },
-                    Prim::NumF(_float_val) => println!("Float element in vector compilation is unimplemented"),
-                    Prim::Bool(b_val) => {
-                        max_width = 1;
-                        if *b_val {
-                            data_vals.push(1);
-                        } else {
-                            data_vals.push(0);
-                        }
+        match exp {
+            Prim::NumI(size_opt, signed_val, unsigned_int_val) => {
+                    let n_size = size_opt.as_ref().unwrap_or(&NType {sign: false, width: 0});
+                    if n_size.sign && !is_signed_number {
+                        is_signed_number = true;
                     }
+                    if n_size.width > max_width {
+                        max_width = n_size.width;
+                    }
+                    let int_val = *unsigned_int_val as i64;
+                    if *signed_val {
+                        data_vals.push(-int_val);
+                    } else {
+                        data_vals.push(int_val);
+                    }
+                },
+            Prim::NumF(_float_val) => println!("Float element in vector compilation is unimplemented"),
+            Prim::Bool(b_val) => {
+                max_width = 1;
+                if *b_val {
+                    data_vals.push(1);
+                } else {
+                    data_vals.push(0);
                 }
+            }
+        }
     }
 
     if max_width == 0 {
@@ -118,22 +119,30 @@ fn memory_gen_vector(lst: &[Spanned<Prim>], builder: &mut ir::Builder) -> Option
 }
 
 // TODO: generate assignments after register allocation
-fn memory_gen_prim(prim_val: Prim, builder: &mut ir::Builder) -> Option<Rc<RefCell<ir::Cell>>> {
+fn memory_gen_prim(prim_val: Prim, builder: &mut ir::Builder, binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>) -> Option<Rc<RefCell<ir::Cell>>> {
     match prim_val {
         Prim::NumI(size_opt, signed, _int_val) => {
             match size_opt {
                 Some(size) => {
+                    // TODO: Figure out how to handle signed ints since constant! takes u64s
                     if signed {
-                        Some(builder.add_primitive("reg", "std_reg", &[size.width as u64]))
+                        let new_reg = builder.add_primitive("reg", "std_reg", &[size.width as u64]);
+                        Some(new_reg)
                     } else {
-                        Some(builder.add_primitive("reg", "std_reg", &[size.width as u64]))
+                        let new_reg = builder.add_primitive("reg", "std_reg", &[size.width as u64]);
+                        memory_gen_assignment(builder, _int_val, size.width as u64, &new_reg);
+                        Some(new_reg)
                     }
                 },
                 None => {
+                    // TODO: Figure out how to handle signed ints since constant! takes u64s
                     if signed {
-                        Some(builder.add_primitive("reg", "std_reg", &[8]))
+                        let new_reg = builder.add_primitive("reg", "std_reg", &[8]);
+                        Some(new_reg)
                     } else {
-                        Some(builder.add_primitive("reg", "std_reg", &[8]))
+                        let new_reg = builder.add_primitive("reg", "std_reg", &[8]);
+                        memory_gen_assignment(builder, _int_val, 8u64, &new_reg);
+                        Some(new_reg)
                     }
                 }
             }
@@ -142,4 +151,32 @@ fn memory_gen_prim(prim_val: Prim, builder: &mut ir::Builder) -> Option<Rc<RefCe
         Prim::Bool(_b_val) => Some(builder.add_primitive("reg", "std_reg", &[1])),
         Prim::NumF(_f_val) => Some(builder.add_primitive("reg", "std_reg", &[8])) // Warning: floats are not preserved in compilation
     }
+}
+
+fn memory_gen_assignment(builder: &mut ir::Builder, _int_val: u64, size: u64, new_reg: &Rc<RefCell<ir::Cell>>) {
+    // Constant signal
+    ir::structure!(builder;
+        let signal_on = constant(1, 1); // value, width
+        let value_const = constant(_int_val, size);
+    );
+    let new_group = builder.add_group("reg_assn");
+    let write_en_assn = builder.build_assignment(
+        new_reg.borrow().get("write_en"),
+        signal_on.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let value_load = builder.build_assignment(
+        new_reg.borrow().get("in"),
+        value_const.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let done_signal = builder.build_assignment(
+        new_group.borrow().get("done"),
+        new_reg.borrow().get("done"),
+        ir::Guard::True
+    );
+    let mut mut_new_group = new_group.borrow_mut();
+    mut_new_group.assignments.push(write_en_assn);
+    mut_new_group.assignments.push(value_load);
+    mut_new_group.assignments.push(done_signal);
 }
