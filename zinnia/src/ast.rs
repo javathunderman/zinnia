@@ -64,30 +64,96 @@ impl fmt::Display for NType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VecT{ pub elem_t: NType, pub count: u8 }
+pub struct VecT{ pub elem_t: Box<Type>, pub count: u8 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Num(NType),
+    Bool,
     VecT(VecT),
     // Ident(&'a str, Vec<Spanned<Type<'a>>>),
-    Arrow(Vec<Spanned<Type>>, Box<Spanned<Type>>),
+    Arrow(Vec<Type>, Box<Type>),
     Unit,
-    Unsolved(Unsolved),
+    Unsolved(UMonotype),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UnsolvedNum{ pub sign: bool, pub min_size: u8 }
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Type::Num(nt) => nt.fmt(f),
+            Type::Bool => write!(f, "bool"),
+            Type::VecT(VecT { elem_t, count }) => write!(f, "Vec<{}, {}>", elem_t, count),
+            Type::Arrow(args, ret) => {
+                let l = args.len();
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UnsolvedVec{ pub sign: bool, pub min_size: u8 }
+                if l == 0 {
+                    write!(f, "() -> ")?;
+                }
+
+                for arg in args.iter() {
+                    write!(f, "{} -> ", arg)?;
+                }
+
+                write!(f, "{}", ret)
+            }
+            Type::Unit => write!(f, "()"),
+            Type::Unsolved(UMonotype { id, st }) => {
+                write!(f, "?T{}", id)?;
+
+                match st {
+                    Subtype::Any => Ok(()),
+                    Subtype::Num(None) => write!(f, "[Num]"),
+                    Subtype::Num(Some(UNum { sign, min_size })) => write!(f, "[Num(sign: {}, min_size: {})]", sign, min_size)
+                }
+            }
+        }
+    }
+}
+
+impl From<UMonotype> for Type {
+    fn from(value: UMonotype) -> Self {
+        Type::Unsolved(value)
+    }
+}
+
+impl From<VecT> for Type {
+    fn from(value: VecT) -> Self {
+        Type::VecT(value)
+    }
+}
+
+impl From<NType> for Type {
+    fn from(value: NType) -> Self {
+        Type::Num(value)
+    }
+}
+
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Subtype {
+    Any,
+    Num(Option<UNum>),
+    // Unit,
+    // Float,
+    // User-defined type
+    // Other { id: i64 }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UMonotype {
+    pub id: u64,
+    pub st: Subtype
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct UNum{ pub sign: bool, pub min_size: u8 }
 
 // TODO: more spans?
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Unsolved {
-    UnsolvedNum(UnsolvedNum),
-    UnsolvedVec(UnsolvedVec),
-}
+// #[derive(Clone, Debug, PartialEq, Eq)]
+// pub enum Unsolved {
+//     UnsolvedNum(UnsolvedNum),
+//     UnsolvedMonotype(Int),
+// }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Prim {
