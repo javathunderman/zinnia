@@ -224,7 +224,7 @@ pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                     )
                     .delimited_by(just(Token::Op("<")), just(Token::Op(">"))),
                 )
-                .map_with(|(elem_t, count), e| (Type::VecT(VecT { elem_t, count }), e.span()));
+                .map_with(|(elem_t, count), e| (Type::VecT(VecT{ elem_t: Box::new(Type::Num(elem_t)), count }), e.span()));
 
             nt.or(vec_t) // .or(generic)
         });
