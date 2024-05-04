@@ -97,7 +97,8 @@ fn memory_gen(ast: &(Expr, SimpleSpan), builder: &mut ir::Builder, binding_map: 
                 },
                 _ => panic!("Unimplemented binop")
             };
-            build_binop_assignments(builder, binop_prim, operand1, operand2, assignment_map, res_size)
+            build_binop_assignments(builder, binop_prim, operand1, operand2, assignment_map, res_size);
+            memory_gen(&rem_expr_2, builder, binding_map, assignment_map)
         }
         _ => None
 
