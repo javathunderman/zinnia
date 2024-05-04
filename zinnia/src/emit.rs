@@ -9,8 +9,10 @@ use crate::{ast::*, Spanned};
 
 pub fn emit(ast: Option<((Expr, SimpleSpan), SimpleSpan)>) -> Result<ir::Context, calyx_utils::Error> {
     let mut ws = frontend::Workspace::from_compile_lib()?;
-    let mut ns:frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("../../838l-build-chain/calyx/primitives/memories/comb.futil".into()))?;
-    let (_, externs) = ns.externs.pop().unwrap();
+    let mut comb_ns:frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("../../838l-build-chain/calyx/primitives/memories/comb.futil".into()))?;
+    let mut std_ns : frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("../../838l-build-chain/calyx/primitives/core.futil".into()))?;
+    let (_, comb_externs) = comb_ns.externs.pop().unwrap();
+    let (_, std_externs) = std_ns.externs.pop().unwrap();
 
     let main: frontend::ast::ComponentDef = frontend::ast::ComponentDef::new(ir::Id::new("main"), false, None, vec![]);
     ws.components.push(main);
@@ -18,8 +20,11 @@ pub fn emit(ast: Option<((Expr, SimpleSpan), SimpleSpan)>) -> Result<ir::Context
     let mut ctx = ir::from_ast::ast_to_ir(ws)?;
     let main_component = &mut ctx.components[0];
 
-    for ext in externs {
+    for ext in comb_externs {
         ctx.lib.add_extern_primitive("../memories/comb.futil".into(), ext);
+    }
+    for ext in std_externs {
+        ctx.lib.add_extern_primitive("../core.futil".into(), ext);
     }
     let mut calyx_builder = ir::Builder::new(main_component, &ctx.lib);
     let mut binding_map : HashMap<String, Rc<RefCell<ir::Cell>>> = HashMap::new();
@@ -60,36 +65,62 @@ fn memory_gen(ast: &(Expr, SimpleSpan), builder: &mut ir::Builder, binding_map: 
                 Expr::Id(var_name) => binding_map.get(var_name).unwrap(),
                 _ => panic!("Cannot compile inlined expressions right now, use a let binding and create the var first")
             };
-            let operand1_reg_name : String = operand1.borrow().name().to_string().clone();
-            let operand2_reg_name : String = operand2.borrow().name().to_string().clone();
-            let operand1_assn : &Rc<RefCell<ir::Group>> = assignment_map.get(&operand1_reg_name).unwrap();
-            let operand2_assn : &Rc<RefCell<ir::Group>> = assignment_map.get(&operand2_reg_name).unwrap();
-            match operator {
-                // TODO: Schedule load/adds/writeout
-                BinaryOp::Add => {
-                    let size = operand1.borrow().get_parameter("WIDTH").unwrap();
-                    let adder_prim = builder.add_primitive("adder", "std_add", &[size]);
-                    let adder_res = builder.add_primitive("res_adder", "std_reg", &[size]);
-                    let mut adder_res_assn = memory_gen_assignment(builder, None, size, &adder_res, Some(&adder_prim));
-                    build_wire_assignments_comb(builder, &adder_prim, &operand1, &operand2, &mut adder_res_assn);
 
-                    let seq = ir::Control::seq(vec![
-                        ir::Control::enable(operand1_assn.to_owned()),
-                        ir::Control::enable(operand2_assn.to_owned()),
-                        ir::Control::enable(adder_res_assn)
-                    ]);
-                    builder.component.control = Rc::new(seq.into());
-                    Some(adder_res)
+            let size = operand1.borrow().get_parameter("WIDTH").unwrap(); // assuming the typechecker will catch non-matching bit widths
+            let mut res_size = size;
+            let binop_prim = match operator {
+                BinaryOp::Add => builder.add_primitive("adder", "std_add", &[size]),
+                BinaryOp::Sub => builder.add_primitive("subtract", "std_sub", &[size]),
+                BinaryOp::Eq =>  {
+                    res_size = 1;
+                    builder.add_primitive("equality", "std_eq", &[size])
                 },
-                _ => {
-                    println!("Unimplemented binop");
-                    None
-                }
-            }
+                BinaryOp::Leq => {
+                    res_size = 1;
+                    builder.add_primitive("leq", "std_le", &[size])
+                },
+                BinaryOp::Geq => {
+                    res_size = 1;
+                    builder.add_primitive("geq", "std_ge", &[size])
+                },
+                BinaryOp::Lt => {
+                    res_size = 1;
+                    builder.add_primitive("lt", "std_lt", &[size])
+                },
+                BinaryOp::Gt => {
+                    res_size = 1;
+                    builder.add_primitive("gt", "std_gt", &[size])
+                },
+                BinaryOp::NotEq => {
+                    res_size = 1;
+                    builder.add_primitive("neq", "std_neq", &[size])
+                },
+                _ => panic!("Unimplemented binop")
+            };
+            build_binop_assignments(builder, binop_prim, operand1, operand2, assignment_map, res_size)
         }
         _ => None
 
     }
+}
+
+/* Intended for combinational primitives, but maybe can be parameterized to work with anything? */
+fn build_binop_assignments(builder: &mut ir::Builder, binop_prim: Rc<RefCell<ir::Cell>>, operand1: &Rc<RefCell<ir::Cell>>, operand2: &Rc<RefCell<ir::Cell>>, assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>, res_size : u64) -> Option<Rc<RefCell<ir::Cell>>> {
+    let operand1_reg_name : String = operand1.borrow().name().to_string().clone();
+    let operand2_reg_name : String = operand2.borrow().name().to_string().clone();
+    let operand1_assn : &Rc<RefCell<ir::Group>> = assignment_map.get(&operand1_reg_name).unwrap();
+    let operand2_assn : &Rc<RefCell<ir::Group>> = assignment_map.get(&operand2_reg_name).unwrap();
+    let binop_res = builder.add_primitive("res_binop", "std_reg", &[res_size]);
+    let mut binop_res_assn = memory_gen_assignment(builder, None, res_size, &binop_res, Some(&binop_prim));
+    build_wire_assignments_comb(builder, &binop_prim, &operand1, &operand2, &mut binop_res_assn);
+
+    let seq = ir::Control::seq(vec![
+        ir::Control::enable(operand1_assn.to_owned()),
+        ir::Control::enable(operand2_assn.to_owned()),
+        ir::Control::enable(binop_res_assn)
+    ]);
+    builder.component.control = Rc::new(seq.into());
+    Some(binop_res)
 }
 
 // note to self: 'sign' bool in NType refers to the int type (either i64 or u64), 'signed' bool on the NumI refers to whether it should be negative
