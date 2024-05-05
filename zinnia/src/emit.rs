@@ -7,7 +7,7 @@ use serde_json::json;
 
 use crate::{ast::*, Spanned};
 
-pub fn emit(ast: Option<((Expr, SimpleSpan), SimpleSpan)>) -> Result<ir::Context, calyx_utils::Error> {
+pub fn emit(ast: &Spanned<Expr>) -> Result<ir::Context, calyx_utils::Error> {
     let mut ws = frontend::Workspace::from_compile_lib()?;
     let mut comb_ns:frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("../../838l-build-chain/calyx/primitives/memories/comb.futil".into()))?;
     let mut std_ns : frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("../../838l-build-chain/calyx/primitives/core.futil".into()))?;
@@ -29,14 +29,10 @@ pub fn emit(ast: Option<((Expr, SimpleSpan), SimpleSpan)>) -> Result<ir::Context
     let mut calyx_builder = ir::Builder::new(main_component, &ctx.lib);
     let mut binding_map : HashMap<String, Rc<RefCell<ir::Cell>>> = HashMap::new();
     let mut assignment_map : HashMap<String, Rc<RefCell<ir::Group>>> = HashMap::new();
-    match ast {
-        Some(success_parsed) => {
-            memory_gen(&success_parsed.0, &mut calyx_builder, &mut binding_map, &mut assignment_map);
-            return Ok(ctx)
-        },
-        None => panic!("Lexer/parser error")
-    };
 
+    memory_gen(ast, &mut calyx_builder, &mut binding_map, &mut assignment_map);
+
+    Ok(ctx)
 }
 
 fn memory_gen(ast: &(Expr, SimpleSpan), builder: &mut ir::Builder, binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>, assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>) -> Option<Rc<RefCell<ir::Cell>>> {
