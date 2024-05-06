@@ -2,8 +2,9 @@ use calyx_ir as ir;
 use calyx_ir::structure;
 use calyx_frontend as frontend;
 use chumsky::span::SimpleSpan;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 use serde_json::json;
+use std::path::PathBuf;
 
 use crate::{ast::*, Spanned};
 
@@ -11,11 +12,16 @@ pub fn emit(ast: Option<((Expr, SimpleSpan), SimpleSpan)>) -> Result<ir::Context
     let mut ws = frontend::Workspace::from_compile_lib()?;
     let mut comb_ns:frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("../../838l-build-chain/calyx/primitives/memories/comb.futil".into()))?;
     let mut std_ns : frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("../../838l-build-chain/calyx/primitives/core.futil".into()))?;
+    // TODO: Figure out why we can't use primitives in the library scope for externally linked components
+    let mut scan_ns : frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("/home/arjun/coursecode/cmsc838l/zinnia/src/calyx-bindings/scan.futil".into()))?;
+    let mut filter_ns : frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("/home/arjun/coursecode/cmsc838l/zinnia/src/calyx-bindings/list_filter.futil".into()))?;
     let (_, comb_externs) = comb_ns.externs.pop().unwrap();
     let (_, std_externs) = std_ns.externs.pop().unwrap();
 
     let main: frontend::ast::ComponentDef = frontend::ast::ComponentDef::new(ir::Id::new("main"), false, None, vec![]);
     ws.components.push(main);
+    ws.components.append(&mut scan_ns.components);
+    ws.components.append(&mut filter_ns.components);
 
     let mut ctx = ir::from_ast::ast_to_ir(ws)?;
     let main_component = &mut ctx.components[0];
@@ -99,10 +105,69 @@ fn memory_gen(ast: &(Expr, SimpleSpan), builder: &mut ir::Builder, binding_map: 
             };
             build_binop_assignments(builder, binop_prim, operand1, operand2, assignment_map, res_size);
             memory_gen(&rem_expr_2, builder, binding_map, assignment_map)
-        }
+        },
+        Expr::Call(func_expr, func_args) => {
+            match &func_expr.as_ref().0 {
+                Expr::Id(func_name) => match func_name.as_str() {
+                    "filter" => match &func_args.0.get(0).unwrap().0 {
+                        Expr::Id(vec_id) => Some(invoke_filter(&vec_id, builder, binding_map, assignment_map)),
+                        _ => panic!("Not a vector variable, try using a let binding")
+                    },
+                    "scan" => match &func_args.0.get(0).unwrap().0 {
+                       Expr::Id(vec_id) => Some(invoke_scan(&vec_id, builder, binding_map, assignment_map)),
+                        _ => panic!("Not a vector variable, try using a let binding")
+                    },
+                    _ => panic!("Unknown function name in call")
+                },
+                _ => panic!("No support for user defined functions at the moment")
+            }
+        },
         _ => None
-
     }
+}
+
+fn build_wire_from_memory(builder: &mut ir::Builder, new_reg: &Rc<RefCell<ir::Cell>>, vec_origin: &Rc<RefCell<ir::Cell>>, bit_width: u64, vec_index: u64, group_label: &str) -> Rc<RefCell<ir::Group>>{
+    let new_group = builder.add_group(group_label);
+    structure!(builder;
+        let signal_on = constant(1, 1);
+        let read_from_addr = constant(bit_width, vec_index);
+    );
+    let write_en_assn = builder.build_assignment(
+        new_reg.borrow().get("write_en"),
+        signal_on.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let seek_addr = builder.build_assignment(
+        vec_origin.borrow().get("addr0"),
+        read_from_addr.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let value_load = builder.build_assignment(
+        new_reg.borrow().get("in"),
+        vec_origin.borrow().get("read_data"),
+        ir::Guard::True,
+    );
+    let done_signal = builder.build_assignment(
+        new_group.borrow().get("done"),
+        new_reg.borrow().get("done"),
+        ir::Guard::True
+    );
+    let mut mut_new_group = new_group.borrow_mut();
+    mut_new_group.assignments.push(write_en_assn);
+    mut_new_group.assignments.push(seek_addr);
+    mut_new_group.assignments.push(value_load);
+    mut_new_group.assignments.push(done_signal);
+    new_group.clone()
+}
+
+fn invoke_scan(vec_id: &str, builder: &mut ir::Builder, binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>, assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>) -> Rc<RefCell<ir::Cell>> {
+    let mut scan_ns : frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("/home/arjun/coursecode/cmsc838l/zinnia/src/calyx-bindings/scan.futil".into())).unwrap();
+    builder.add_component("scan_8", "scan", scan_ns.components[0].signature.clone())
+}
+
+fn invoke_filter(vec_id: &str, builder: &mut ir::Builder, binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>, assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>) -> Rc<RefCell<ir::Cell>> {
+    let mut filter_ns : frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some("/home/arjun/coursecode/cmsc838l/zinnia/src/calyx-bindings/filter.futil".into())).unwrap();
+    builder.add_component("filter", "filter", filter_ns.components[0].signature.clone())
 }
 
 /* Intended for combinational primitives, but maybe can be parameterized to work with anything? */
