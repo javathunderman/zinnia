@@ -46,7 +46,7 @@ fn main() -> Result<(), std::io::Error> {
 
             let _res = match tc {
                 // TODO: typed ast
-                Ok(o) => o,
+                Ok(o) => dbg!(o),
                 Err(err) => {
                     report_tc_error(&filename, loc.start, err, &src);
 
@@ -189,9 +189,9 @@ fn report_tc_error(filename: &String, start: usize, tc_err: types::Error, src: &
             types::Error::WithContext { ctx, err } => {
                 match ctx {
                     types::ContextInfo::WhileApplying(_, _, _) => todo!(),
-                    types::ContextInfo::WhileChecking(expr, ty) => {
+                    types::ContextInfo::WhileChecking(span, ty) => {
                         report = report.with_label(
-                            Label::new((filename.clone(), expr.1.into_range()))
+                            Label::new((filename.clone(), span.into_range()))
                                 .with_message(format!(
                                     "while checking expression had type {}",
                                     ty.0
