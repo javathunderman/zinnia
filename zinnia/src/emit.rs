@@ -11,7 +11,6 @@ use crate::{ast::*, Spanned};
 pub fn emit(
     ast: Option<((Expr, SimpleSpan), SimpleSpan)>,
 ) -> Result<ir::Context, calyx_utils::Error> {
-    // let mut ws = frontend::Workspace::from_compile_lib()?;
 
         let mut ws = frontend::Workspace::construct_with_all_deps::<false>(
         vec![
@@ -23,44 +22,14 @@ pub fn emit(
         Path::new("/home/home/src/calyx/"),
     )?;
 
-    // let mut comb_ns: frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some(
-    //     "/home/home/src/calyx/primitives/memories/comb.futil".into(),
-    // ))?;
-
-    // let mut std_ns: frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some(
-    //     "/home/home/src/calyx/primitives/core.futil".into(),
-    // ))?;
-
-    // // TODO: Figure out why we can't use primitives in the library scope for externally linked components
-    // let mut scan_ns: frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some(
-    //     "/home/home/src/838l-project/zinnia/src/calyx-bindings/scan.futil".into(),
-    // ))?;
-
-    // let mut filter_ns: frontend::NamespaceDef = frontend::NamespaceDef::construct(&Some(
-    //     "/home/home/src/838l-project/zinnia/src/calyx-bindings/list_filter.futil".into(),
-    // ))?;
-
-    // let (_, comb_externs) = comb_ns.externs.pop().unwrap();
-    // let (_, std_externs) = std_ns.externs.pop().unwrap();
-
     let main: frontend::ast::ComponentDef =
         frontend::ast::ComponentDef::new(ir::Id::new("main"), false, None, vec![]);
 
     ws.components.push(main);
-    // ws.components.append(&mut dbg!(scan_ns.components));
-    // ws.components.append(&mut dbg!(filter_ns.components));
 
     let mut ctx = ir::from_ast::ast_to_ir(ws)?;
     let main_component = &mut ctx.components[0];
 
-    // for ext in comb_externs {
-    //     // ctx.lib.add_extern_primitive("../memories/comb.futil".into(), ext);
-    //     ctx.lib.add_extern_primitive("among us".into(), dbg!(ext));
-    // }
-    // for ext in std_externs {
-    //     ctx.lib
-    //         .add_extern_primitive("../core.futil".into(), dbg!(ext));
-    // }
     let mut calyx_builder = ir::Builder::new(main_component, &ctx.lib);
     let mut binding_map: HashMap<String, Rc<RefCell<ir::Cell>>> = HashMap::new();
     let mut assignment_map: HashMap<String, Rc<RefCell<ir::Group>>> = HashMap::new();
