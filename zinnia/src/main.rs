@@ -54,8 +54,11 @@ fn main() -> Result<(), std::io::Error> {
                     exit(-1)
                 }
             };
-            
-            let main = decls.iter().find(|x| x.id == "main").expect("Missing a main!");
+
+            let main = decls
+                .iter()
+                .find(|x| x.id == "main")
+                .expect("Missing a main!");
 
             let ctx = match emit::emit(&main.expr) {
                 Ok(v) => v,
@@ -64,15 +67,14 @@ fn main() -> Result<(), std::io::Error> {
                         let (file, start, end) = e.location();
 
                         (file.to_owned(), start, end)
-
                     };
 
                     Report::build(ReportKind::Error, file.clone(), start)
                         .with_message(e.message())
                         .with_label(
                             Label::new((file.clone(), start..end))
-                            .with_message(e.message())
-                            .with_color(Color::Red)
+                                .with_message(e.message())
+                                .with_color(Color::Red),
                         )
                         .finish()
                         .print(sources([(file.clone(), &src)]))
@@ -88,7 +90,6 @@ fn main() -> Result<(), std::io::Error> {
                 ir::Printer::write_component(comp, out).expect("stdout io err");
                 writeln!(out)?;
             }
-
         };
 
         parse_errs
