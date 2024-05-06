@@ -43,7 +43,7 @@ fn main() -> Result<(), std::io::Error> {
 
         dbg!(&ast);
 
-        if let Some(e) = ast.clone() {
+        /* if let Some(e) = ast.clone() {
             let tc_err = types::check_all(&vec![Decl { id: "main".to_owned(), expr: e.0, ty: (Type::Num(NType{sign: false, width: 8}), SimpleSpan::new(0, 0)) }]);
 
             let mut report = Report::build(ReportKind::Error, filename.clone(), e.1.start);
@@ -136,40 +136,40 @@ fn main() -> Result<(), std::io::Error> {
             }
 
             report.finish().print(sources([(filename.clone(), &src)])).expect("stdout io err");
+        }; */
+
+
+        let ctx = match emit::emit(ast) {
+            Ok(v) => v,
+            Err(e) => {
+                let (file, start, end) = {
+                    let (file, start, end) = e.location();
+
+                    (file.to_owned(), start, end)
+
+                };
+
+                Report::build(ReportKind::Error, file.clone(), start)
+                    .with_message(e.message())
+                    .with_label(
+                        Label::new((file.clone(), start..end))
+                            .with_message(e.message())
+                            .with_color(Color::Red)
+                    )
+                    .finish()
+                    .print(sources([(file.clone(), &src)]))
+                    .expect("stdout io err");
+
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"));
+            }
         };
 
+        let out = &mut std::io::stdout();
 
-        // let ctx = match emit::emit(ast) {
-        //     Ok(v) => v,
-        //     Err(e) => {
-        //         let (file, start, end) = {
-        //             let (file, start, end) = e.location();
-
-        //             (file.to_owned(), start, end)
-
-        //         };
-
-        //         Report::build(ReportKind::Error, file.clone(), start)
-        //             .with_message(e.message())
-        //             .with_label(
-        //                 Label::new((file.clone(), start..end))
-        //                     .with_message(e.message())
-        //                     .with_color(Color::Red)
-        //             )
-        //             .finish()
-        //             .print(sources([(file.clone(), &src)]))
-        //             .expect("stdout io err");
-
-        //         return Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"));
-        //     }
-        // };
-
-        // let out = &mut std::io::stdout();
-
-        // for comp in &ctx.components {
-        //     ir::Printer::write_component(comp, out).expect("stdout io err");
-        //     writeln!(out)?;
-        // }
+        for comp in &ctx.components {
+            ir::Printer::write_component(comp, out).expect("stdout io err");
+            writeln!(out)?;
+        }
 
         parse_errs
     } else {
