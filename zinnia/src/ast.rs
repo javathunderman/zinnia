@@ -64,7 +64,10 @@ impl fmt::Display for NType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VecT{ pub elem_t: Box<Type>, pub count: u8 }
+pub struct VecT {
+    pub elem_t: Box<Type>,
+    pub count: u8,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
@@ -103,7 +106,9 @@ impl fmt::Display for Type {
                 match st {
                     Subtype::Any => Ok(()),
                     Subtype::Num(None) => write!(f, "[Num]"),
-                    Subtype::Num(Some(UNum { sign, min_size })) => write!(f, "[Num(sign: {}, min_size: {})]", sign, min_size)
+                    Subtype::Num(Some(UNum { sign, min_size })) => {
+                        write!(f, "[Num(sign: {}, min_size: {})]", sign, min_size)
+                    }
                 }
             }
         }
@@ -128,7 +133,6 @@ impl From<NType> for Type {
     }
 }
 
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Subtype {
     Any,
@@ -142,11 +146,14 @@ pub enum Subtype {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct UMonotype {
     pub id: u64,
-    pub st: Subtype
+    pub st: Subtype,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct UNum{ pub sign: bool, pub min_size: u8 }
+pub struct UNum {
+    pub sign: bool,
+    pub min_size: u8,
+}
 
 // TODO: more spans?
 // #[derive(Clone, Debug, PartialEq, Eq)]

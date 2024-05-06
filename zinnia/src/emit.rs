@@ -8,11 +8,8 @@ use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use crate::{ast::*, Spanned};
 
-pub fn emit(
-    ast: Option<((Expr, SimpleSpan), SimpleSpan)>,
-) -> Result<ir::Context, calyx_utils::Error> {
-
-        let mut ws = frontend::Workspace::construct_with_all_deps::<false>(
+pub fn emit(ast: &(Expr, SimpleSpan)) -> Result<ir::Context, calyx_utils::Error> {
+    let mut ws = frontend::Workspace::construct_with_all_deps::<false>(
         vec![
             "/home/home/src/calyx/primitives/memories/comb.futil".into(),
             "/home/home/src/calyx/primitives/core.futil".into(),
@@ -33,18 +30,14 @@ pub fn emit(
     let mut calyx_builder = ir::Builder::new(main_component, &ctx.lib);
     let mut binding_map: HashMap<String, Rc<RefCell<ir::Cell>>> = HashMap::new();
     let mut assignment_map: HashMap<String, Rc<RefCell<ir::Group>>> = HashMap::new();
-    match ast {
-        Some(success_parsed) => {
-            memory_gen(
-                &success_parsed.0,
-                &mut calyx_builder,
-                &mut binding_map,
-                &mut assignment_map,
-            );
-            return Ok(ctx);
-        }
-        None => panic!("Lexer/parser error"),
-    };
+
+    memory_gen(
+        &ast,
+        &mut calyx_builder,
+        &mut binding_map,
+        &mut assignment_map,
+    );
+    return Ok(ctx);
 }
 
 fn memory_gen(

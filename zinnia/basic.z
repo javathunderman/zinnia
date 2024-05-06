@@ -1,1 +1,1 @@
-7u8
+let main: u8 = (let ((x: u8, 5)) x);

@@ -3,8 +3,6 @@ use chumsky::prelude::*;
 
 use self::VecT;
 
-// use self::Vec;
-
 pub fn lexer<'src>(
 ) -> impl Parser<'src, &'src str, Vec<(Token<'src>, Span)>, extra::Err<Rich<'src, char, Span>>> {
     let digits = text::digits(10).to_slice();
@@ -43,7 +41,7 @@ pub fn lexer<'src>(
             })
     };
 
-    let ctrl = one_of("()[],:").map(Token::Ctrl);
+    let ctrl = one_of("()[],:;").map(Token::Ctrl);
 
     // A parser for operators
     let op = one_of("+*-/!=><")
@@ -79,6 +77,30 @@ pub fn lexer<'src>(
         .collect()
 }
 
+pub fn decl_parser<'tokens, 'src: 'tokens>() -> impl Parser<
+    'tokens,
+    ParserInput<'tokens, 'src>,
+    Vec<Decl>,
+    extra::Err<Rich<'tokens, Token<'src>, Span>>,
+> + Clone {
+    just(Token::Let)
+        .ignore_then({
+            id_parser()
+                .then(just(Token::Ctrl(':')).ignore_then(ty_parser()))
+                .then_ignore(just(Token::Op("=")))
+                .then(expr_parser())
+                .map(|((id, ty), expr)| Decl {
+                    id: id.to_string(),
+                    ty,
+                    expr,
+                })
+                .labelled("binding")
+        })
+        .then_ignore(just(Token::Ctrl(';')))
+        .repeated()
+        .collect()
+}
+
 pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
     'tokens,
     ParserInput<'tokens, 'src>,
@@ -110,15 +132,12 @@ pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
             )
             .map(|v| Value::Vec(v.into_boxed_slice()));
 
-        let id = select! {
-            Token::Ident(id) => id
-        }
-        .labelled("identifier");
+        let id = id_parser();
 
         let val = prim.map(Value::Prim).or(vec).map(Expr::Value);
 
         let atom = val
-            .or(id.map(&str::to_string).map(Expr::Id))
+            .or(id.clone().map(&str::to_string).map(Expr::Id))
             .map_with(|expr, e| (expr, e.span()));
 
         let if_ = just(Token::If)
@@ -165,69 +184,7 @@ pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
             .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
             .map_with(|(fn_, args), e| (Expr::Call(Box::new(fn_), args), e.span()));
 
-        let type_ = recursive(|type_| {
-            // let generic = id
-            //     .then(
-            //         type_
-            //             .separated_by(just(Token::Ctrl(',')))
-            //             .at_least(1)
-            //             .collect::<Vec<_>>()
-            //             .delimited_by(just(Token::Op("<")), just(Token::Op(">")))
-            //             .or_not(),
-            //     )
-            //     .map_with(|(id, args), e| {
-            //         (Type::Ident(id, args.unwrap_or_else(Vec::new)), e.span())
-            //     });
-
-            let nt = select! {
-                Token::NType(ty) => Type::Num(ty)
-            }
-            .map_with(|x, e| (x, e.span()));
-
-            // NOTE: Vec is a primitive which only takes numeric types
-            // and this is currently checked at a *parser* level
-            let vec_t = just(Token::Vec)
-                .ignore_then(
-                    select! {
-                        Token::NType(ty) => ty
-                    }
-                    .then_ignore(just(Token::Ctrl(',')))
-                    .then(
-                        select! {
-                          Token::NumI(sign, val, ty) => (sign, val, ty)
-                        }
-                        .labelled("size")
-                        .as_context()
-                        .try_map(|(sign, val, ty), span| {
-                            if sign {
-                                return Err(Rich::custom(
-                                    span,
-                                    format!(
-                                        "Given vector size -{} but vector size cannot be negative!",
-                                        val
-                                    ),
-                                ));
-                            }
-
-                            if ty.is_some() {
-                                return Err(Rich::custom(
-                                    span,
-                                    "Vector size should not be given an explicit type!",
-                                ));
-                            }
-
-                            u8::try_from(val).map_err(|e| {
-                                Rich::custom(span, format!("Invalid vector size {}! {}", val, e))
-                            })
-                        })
-                        .map_err(|e| dbg!(e)),
-                    )
-                    .delimited_by(just(Token::Op("<")), just(Token::Op(">"))),
-                )
-                .map_with(|(elem_t, count), e| (Type::VecT(VecT{ elem_t: Box::new(Type::Num(elem_t)), count }), e.span()));
-
-            nt.or(vec_t) // .or(generic)
-        });
+        let type_ = ty_parser();
 
         // e.g.
         // (let ((x: i8, 3), (y: vec<i8, 8>, [1, 2, 3, 4, 5]))
@@ -235,6 +192,7 @@ pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
         let let_ = just(Token::Let)
             .ignore_then({
                 let binding = id
+                    .clone()
                     .then(just(Token::Ctrl(':')).ignore_then(type_).or_not())
                     .then_ignore(just(Token::Ctrl(',')))
                     .then(expr.clone())
@@ -260,5 +218,96 @@ pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
             .map_with(|(binds, body), e| (Expr::Let(binds, Box::new(body)), e.span()));
 
         atom.clone().or(if_).or(bop).or(let_).or(call)
+    })
+}
+
+fn id_parser<'tokens, 'src: 'tokens>() -> impl Parser<
+    'tokens,
+    ParserInput<'tokens, 'src>,
+    &'src str,
+    extra::Err<Rich<'tokens, Token<'src>, Span>>,
+> + Clone {
+    select! {
+        Token::Ident(id) => id
+    }
+    .labelled("identifier")
+}
+
+fn ty_parser<'tokens, 'src: 'tokens>() -> impl Parser<
+    'tokens,
+    ParserInput<'tokens, 'src>,
+    Spanned<Type>,
+    extra::Err<Rich<'tokens, Token<'src>, Span>>,
+> + Clone {
+    recursive(|_| {
+        // let generic = id
+        //     .then(
+        //         type_
+        //             .separated_by(just(Token::Ctrl(',')))
+        //             .at_least(1)
+        //             .collect::<Vec<_>>()
+        //             .delimited_by(just(Token::Op("<")), just(Token::Op(">")))
+        //             .or_not(),
+        //     )
+        //     .map_with(|(id, args), e| {
+        //         (Type::Ident(id, args.unwrap_or_else(Vec::new)), e.span())
+        //     });
+
+        let nt = select! {
+            Token::NType(ty) => Type::Num(ty)
+        }
+        .map_with(|x, e| (x, e.span()));
+
+        // NOTE: Vec is a primitive which only takes numeric types
+        // and this is currently checked at a *parser* level
+        let vec_t = just(Token::Vec)
+            .ignore_then(
+                select! {
+                    Token::NType(ty) => ty
+                }
+                .then_ignore(just(Token::Ctrl(',')))
+                .then(
+                    select! {
+                      Token::NumI(sign, val, ty) => (sign, val, ty)
+                    }
+                    .labelled("size")
+                    .as_context()
+                    .try_map(|(sign, val, ty), span| {
+                        if sign {
+                            return Err(Rich::custom(
+                                span,
+                                format!(
+                                    "Given vector size -{} but vector size cannot be negative!",
+                                    val
+                                ),
+                            ));
+                        }
+
+                        if ty.is_some() {
+                            return Err(Rich::custom(
+                                span,
+                                "Vector size should not be given an explicit type!",
+                            ));
+                        }
+
+                        u8::try_from(val).map_err(|e| {
+                            Rich::custom(span, format!("Invalid vector size {}! {}", val, e))
+                        })
+                    })
+                    .map_err(|e| dbg!(e)),
+                )
+                .delimited_by(just(Token::Op("<")), just(Token::Op(">"))),
+            )
+            .map_with(|(elem_t, count), e| {
+                (
+                    Type::VecT(VecT {
+                        elem_t: Box::new(Type::Num(elem_t)),
+                        count,
+                    }),
+                    e.span(),
+                )
+            });
+
+        nt.or(vec_t) // .or(generic)
     })
 }
