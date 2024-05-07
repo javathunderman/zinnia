@@ -192,6 +192,47 @@ fn build_wire_from_memory(
     new_group.clone()
 }
 
+fn build_wire_to_memory(
+    builder: &mut ir::Builder,
+    src_reg: &Rc<RefCell<ir::Cell>>,
+    vec_dest: &Rc<RefCell<ir::Cell>>,
+    bit_width: u64,
+    vec_index: u64,
+    group_label: &str,
+) -> Rc<RefCell<ir::Group>> {
+    let new_group = builder.add_group(group_label);
+    structure!(builder;
+        let signal_on = constant(1, 1);
+        let write_to_addr = constant(bit_width, vec_index);
+    );
+    let write_en_assn = builder.build_assignment(
+        src_reg.borrow().get("write_en"),
+        signal_on.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let seek_addr = builder.build_assignment(
+        vec_dest.borrow().get("addr0"),
+        write_to_addr.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let value_load = builder.build_assignment(
+        vec_dest.borrow().get("write_data"),
+        src_reg.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let done_signal = builder.build_assignment(
+        new_group.borrow().get("done"),
+        vec_dest.borrow().get("done"),
+        ir::Guard::True,
+    );
+    let mut mut_new_group = new_group.borrow_mut();
+    mut_new_group.assignments.push(write_en_assn);
+    mut_new_group.assignments.push(seek_addr);
+    mut_new_group.assignments.push(value_load);
+    mut_new_group.assignments.push(done_signal);
+    new_group.clone()
+}
+
 fn invoke_scan(
     vec_id: &str,
     builder: &mut ir::Builder,
