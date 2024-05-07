@@ -199,6 +199,46 @@ impl ast::BinaryOp {
 }
 
 impl Type {
+    fn free_vars(&self) -> Vec<UMonotype> {
+        let mut v = vec![];
+
+        self._free_vars(&mut v);
+
+        v
+    }
+
+    fn _free_vars(&self, vars: &mut Vec<UMonotype>) {
+        match self {
+            Type::VecT(_) => todo!(),
+            Type::Arrow(_, _) => todo!(),
+            Unsolved(u) => vars.push(*u),
+            Type::ForAll(_, _) => todo!(),
+            Type::Unit | Type::Num(_) | Type::Bool => (),
+        }
+    }
+
+    // Substitute subtypes with matching id with a new type
+    fn sub(&self, t_new: UMonotype) -> Type {
+        match self {
+            Type::VecT(VecT { elem_t, count }) => VecT {
+                elem_t: Box::new(elem_t.sub(t_new)),
+                count: *count,
+            }
+            .into(),
+
+            Type::Arrow(params, ret) => Type::Arrow(
+                params.iter().map(|p| p.sub(t_new)).collect(),
+                Box::new(ret.sub(t_new)),
+            ),
+
+            Unsolved(UMonotype { id, .. }) if *id == t_new.id => t_new.into(),
+
+            Type::ForAll(a, t) => Type::ForAll(a.clone(), Box::new(t.sub(t_new))),
+
+            _ => self.clone(),
+        }
+    }
+
     fn assert_numeric(&self) -> Result<Type, Error> {
         if matches!(
             self,
@@ -223,6 +263,13 @@ impl Type {
         };
 
         match (s.clone(), t.clone()) {
+            (Type::ForAll(UMonotype { st, .. }, inner), ty) => {
+                // Instantiate a new instance of the variable we're quantifying over
+                let new = ctx.new_unsolved(st);
+
+                // And then attempt unification
+                inner.sub(new).unify(ctx, ty)
+            }
             (Type::Unit, Type::Unit) => Ok(Type::Unit),
             (Type::Bool, Type::Bool) => Ok(Type::Bool),
 
@@ -269,10 +316,11 @@ impl Type {
                     // If they're the same and assignable, solve by order
                     (Subtype::Any, Subtype::Any) => solve_by_order(),
                     (Subtype::Num(None), Subtype::Num(None)) => solve_by_order(),
+                    (Subtype::Vec, Subtype::Vec) => solve_by_order(),
 
                     // Any solves to whatever else
-                    (Subtype::Any, Subtype::Num(_)) => Ok(ctx.solve(u1.id, u2.into())),
-                    (Subtype::Num(_), Subtype::Any) => Ok(ctx.solve(u2.id, u1.into())),
+                    (Subtype::Any, _) => Ok(ctx.solve(u1.id, u2.into())),
+                    (_, Subtype::Any) => Ok(ctx.solve(u2.id, u1.into())),
 
                     // Similarly, Num(None) < Num(Some(...))
                     (Subtype::Num(None), Subtype::Num(Some(_))) => Ok(ctx.solve(u1.id, u2.into())),
@@ -288,11 +336,22 @@ impl Type {
 
                         Ok(ctx.solve(u2.id, unified))
                     }
+
+                    (Subtype::Num(_), Subtype::Vec) | (Subtype::Vec, Subtype::Num(_)) => {
+                        Err(Error::UnableToUnify {
+                            t1: Unsolved(u1),
+                            t2: Unsolved(u2),
+                        })
+                    }
                 }
             }
 
             // Unsolved first to reduce case duplication
             (s, u @ Unsolved(_)) => u.unify(ctx, s),
+
+            (Unsolved(UMonotype { id, st: Subtype::Vec }), v @ Type::VecT(_)) => {
+                Ok(ctx.solve(id, v))
+            }
 
             (
                 Unsolved(UMonotype {
@@ -556,13 +615,36 @@ impl Typeable for Spanned<&ast::Prim> {
 
 impl Context {
     fn new() -> Self {
-        Context {
+        let mut ctx = Context {
             scope: HashMap::new(),
             scopes: Vec::new(),
             locs: HashMap::new(),
             counter: 0,
             solved: HashMap::new(),
-        }
+        };
+
+        let u_vec = UMonotype {
+            id: 0,
+            st: Subtype::Vec,
+        };
+
+        ctx.scope.insert(
+            "scan".to_owned(),
+            Type::ForAll(
+                u_vec,
+                Box::new(Type::Arrow(vec![u_vec.into()], Box::new(u_vec.into()))),
+            ),
+        );
+
+        ctx.scope.insert(
+            "filter".to_owned(),
+            Type::ForAll(
+                u_vec,
+                Box::new(Type::Arrow(vec![u_vec.into()], Box::new(u_vec.into()))),
+            ),
+        );
+
+        ctx
     }
 
     fn scoped<F, T>(&mut self, f: F) -> T
@@ -711,11 +793,4 @@ pub fn check_all(decls: &Vec<Decl>) -> Result<Vec<SBinding>, Error> {
         .iter()
         .map(|d| ctx.check(d))
         .collect::<Result<Vec<SBinding>, Error>>()
-
-    // for decl in decls {
-    //     // TODO:?
-    //     ctx.check(decl)?;
-    // }
-
-    // Ok(())
 }
