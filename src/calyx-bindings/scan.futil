@@ -1,5 +1,3 @@
-import "primitives/core.futil";
-import "primitives/memories/comb.futil";
 component scan() -> (@done done: 1) {
   cells {
     ref input_arr = comb_mem_d1(8, 8, 8); // 8 bits per slot, 18 slots (9 numbers + 9 for building the prefix sum tree), 8 bit index
