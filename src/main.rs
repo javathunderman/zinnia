@@ -9,6 +9,7 @@ mod types;
 use ariadne::{sources, Color, ColorGenerator, Label, Report, ReportKind};
 use calyx_ir as ir;
 use chumsky::prelude::*;
+use types::ContextInfo;
 use std::{io::Write, process::exit};
 
 use ast::*;
@@ -202,7 +203,10 @@ fn report_tc_error(filename: &String, start: usize, tc_err: types::Error, src: &
 
                         order -= 1;
                     }
-                    types::ContextInfo::WhileUnifying(_, _) => todo!(),
+                    types::ContextInfo::WhileUnifying(t1, t2) => {
+                        report = report.with_note(format!("while unifying {t1} and {t2}"));
+                        order -= 1;
+                    }
                     types::ContextInfo::InExpression(s) => {
                         report = report.with_label(
                             Label::new((filename.clone(), s.into_range()))

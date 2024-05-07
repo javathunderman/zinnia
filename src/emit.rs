@@ -13,15 +13,24 @@ use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 use crate::{ast::*, Spanned};
 
 pub fn emit(ast: &(Expr, SimpleSpan)) -> Result<ir::Context, calyx_utils::Error> {
+    let cargo = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    let paths = [
+        "./calyx/primitives/memories/comb.futil",
+        "./calyx/primitives/core.futil",
+        "./src/calyx-bindings/scan.futil",
+        "./src/calyx-bindings/list_filter.futil",
+    ]
+    .iter()
+    .map(|p| Path::join(cargo, p))
+    .map(|p| Path::canonicalize(p.as_path()))
+    .collect::<Result<Vec<PathBuf>, std::io::Error>>()?;
+
     let mut ws = frontend::Workspace::construct_with_all_deps::<false>(
-        vec![
-            "/home/arjun/coursecode/838l-build-chain/calyx/primitives/memories/comb.futil".into(),
-            "/home/arjun/coursecode/838l-build-chain/calyx/primitives/core.futil".into(),
-            "/home/arjun/coursecode/838l-build-chain/calyx/primitives/binary_operators.futil".into(),
-            "/home/arjun/coursecode/cmsc838l/src/calyx-bindings/scan.futil".into(),
-            "/home/arjun/coursecode/cmsc838l/src/calyx-bindings/list_filter.futil".into()
-        ],
-        Path::new("/home/arjun/coursecode/838l-build-chain/calyx/"),
+        paths,
+        Path::canonicalize(Path::new("./../calyx"))
+            .expect("Missing calyx! Did you clone the submodule?")
+            .as_path(),
     )?;
 
     let main: frontend::ast::ComponentDef =
