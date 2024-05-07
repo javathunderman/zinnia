@@ -1,11 +1,12 @@
 #![allow(dead_code)]
 
+use std::collections::hash_map::{Entry, OccupiedEntry};
 use std::collections::HashMap;
 
 use crate::ast::{Decl, Expr, Type::Unsolved};
 use crate::{ast, NType, Span, Spanned, Subtype, Type, UMonotype, UNum, VecT};
 
-type Scope = HashMap<String, Type>;
+type Scope = HashMap<String, (Type, Option<Span>)>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SPrim {
@@ -80,6 +81,10 @@ pub enum Error {
         t1: Type,
         t2: Type,
     },
+    ReservedIdentifier {
+        id: String,
+        loc: Span
+    }
 }
 
 #[derive(Debug)]
@@ -507,7 +512,17 @@ fn infer(expr: Spanned<Expr>, ctx: &mut Context) -> Result<SExpr, Error> {
             let binds_ = binds
                 .iter()
                 .map(|bind| {
-                    let bind_expr = if let Some(ann_ty) = &bind.type_hint {
+                    let ast::Binding { id: (id, loc), type_hint, expr  } = dbg!(bind);
+
+                    let reserved = ["scan", "filter"];
+
+                    // If it's a variable *we've* declared, we allow shadowing
+                    // but if it's a built-in, then no.
+                    if reserved.contains(&id.as_str()) {
+                        return Err(Error::ReservedIdentifier { id: id.clone(), loc: *loc })
+                    };
+
+                    let bind_expr = if let Some(ann_ty) = &type_hint {
                         let act_ty = infer(*bind.expr.clone(), ctx)
                             .with_context(|| ContextInfo::WhileChecking(expr.1, ann_ty.clone()))?;
 
@@ -520,18 +535,31 @@ fn infer(expr: Spanned<Expr>, ctx: &mut Context) -> Result<SExpr, Error> {
                                 actual: act_ty.ty.clone(),
                                 expr: *bind.clone().expr,
                             })
-                            .within(bind.expr.span())
+                            .within(expr.span())
                             .with_context(|| ContextInfo::WhileChecking(expr.1, ann_ty.clone()))?;
 
                         ctx.apply(act_ty)
                     } else {
-                        infer(*bind.expr.clone(), ctx)?
+                        infer(*expr.clone(), ctx)?
                     };
 
-                    ctx.scope.insert(bind.id.clone(), bind_expr.ty.clone());
+                    match ctx.scope.entry(bind.id.0.clone()) {
+                        Entry::Occupied(mut o) => {
+                            // If it's a variable *we've* declared, we allow shadowing
+                            // but if it's a built-in, then no.
+                            if o.get().1.is_some() {
+                                o.insert((bind_expr.ty.clone(), Some(*loc)));
+                            } else {
+                                return Err(Error::ReservedIdentifier { id: id.clone(), loc: *loc })
+                            };
+                        }
+                        Entry::Vacant(v) => {
+                            v.insert((bind_expr.ty.clone(), Some(*loc)));
+                        }
+                    }
 
                     Ok(SBinding {
-                        id: bind.id.clone(),
+                        id: bind.id.0.clone(),
                         expr: bind_expr,
                     })
                 })
@@ -630,18 +658,19 @@ impl Context {
 
         ctx.scope.insert(
             "scan".to_owned(),
-            Type::ForAll(
+            (Type::ForAll(
                 u_vec,
                 Box::new(Type::Arrow(vec![u_vec.into()], Box::new(u_vec.into()))),
             ),
+            None)
         );
 
         ctx.scope.insert(
             "filter".to_owned(),
-            Type::ForAll(
+            (Type::ForAll(
                 u_vec,
                 Box::new(Type::Arrow(vec![u_vec.into()], Box::new(u_vec.into()))),
-            ),
+            ), None)
         );
 
         ctx
@@ -662,6 +691,7 @@ impl Context {
         self.scope
             .get(var)
             .or_else(|| self.scopes.iter().rev().find_map(|scope| scope.get(var)))
+            .map(|(t, _)| t)
             .cloned()
     }
 
@@ -671,7 +701,7 @@ impl Context {
             .with_context(|| ContextInfo::WhileChecking(decl.expr.1, decl.ty.clone()))?;
 
         Ok(SBinding {
-            id: decl.id.clone(),
+            id: decl.id.0.clone(),
             expr: se,
         })
     }
@@ -786,7 +816,7 @@ pub fn check_all(decls: &Vec<Decl>) -> Result<Vec<SBinding>, Error> {
     let mut ctx = Context::new();
 
     for decl in decls {
-        ctx.scope.insert(decl.id.clone(), decl.ty.0.clone());
+        ctx.scope.insert(decl.id.0.clone(), (decl.ty.0.clone(), Some(decl.id.span())));
     }
 
     decls

@@ -9,8 +9,8 @@ mod types;
 use ariadne::{sources, Color, ColorGenerator, Label, Report, ReportKind};
 use calyx_ir as ir;
 use chumsky::prelude::*;
-use types::ContextInfo;
 use std::{io::Write, process::exit};
+use types::ContextInfo;
 
 use ast::*;
 use parse::*;
@@ -58,7 +58,7 @@ fn main() -> Result<(), std::io::Error> {
 
             let main = decls
                 .iter()
-                .find(|x| x.id == "main")
+                .find(|x| x.id.0 == "main")
                 .expect("Missing a main!");
 
             let ctx = match emit::emit(&main.expr) {
@@ -225,6 +225,15 @@ fn report_tc_error(filename: &String, start: usize, tc_err: types::Error, src: &
             }
             types::Error::UnableToUnify { t1, t2 } => {
                 report = report.with_message(format!("Unable to unify types {} and {}", t1, t2));
+            }
+            types::Error::ReservedIdentifier { id, loc } => {
+                report = report
+                    .with_message(format!("Use of reserved identifier {id}"))
+                    .with_label(
+                        Label::new((filename.clone(), loc.into_range()))
+                            .with_message("variable declared here")
+                            .with_color(Color::Red),
+                    );
             }
         }
     }

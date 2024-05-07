@@ -86,11 +86,12 @@ pub fn decl_parser<'tokens, 'src: 'tokens>() -> impl Parser<
     just(Token::Let)
         .ignore_then({
             id_parser()
+                .map_with(|id, e| (id, e.span()))
                 .then(just(Token::Ctrl(':')).ignore_then(ty_parser()))
                 .then_ignore(just(Token::Op("=")))
                 .then(expr_parser())
-                .map(|((id, ty), expr)| Decl {
-                    id: id.to_string(),
+                .map(|(((id, span), ty), expr)| Decl {
+                    id: (id.to_string(), span),
                     ty,
                     expr,
                 })
@@ -193,12 +194,13 @@ pub fn expr_parser<'tokens, 'src: 'tokens>() -> impl Parser<
             .ignore_then({
                 let binding = id
                     .clone()
+                    .map_with(|i, e| (i, e.span()))
                     .then(just(Token::Ctrl(':')).ignore_then(type_).or_not())
                     .then_ignore(just(Token::Ctrl(',')))
                     .then(expr.clone())
                     .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
-                    .map(|((id, ty), expr)| Binding {
-                        id: id.to_string(),
+                    .map(|(((id, span), ty), expr)| Binding {
+                        id: (id.to_string(), span),
                         type_hint: ty,
                         expr: Box::new(expr),
                     })

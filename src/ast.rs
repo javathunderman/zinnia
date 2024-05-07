@@ -45,7 +45,7 @@ impl<'src> fmt::Display for Token<'src> {
 }
 
 pub struct Decl {
-    pub id: String,
+    pub id: Spanned<String>,
     pub expr: Spanned<Expr>,
     pub ty: Spanned<Type>,
 }
@@ -196,7 +196,7 @@ pub enum BinaryOp {
 
 #[derive(Clone, Debug)]
 pub struct Binding {
-    pub id: String,
+    pub id: Spanned<String>,
     pub type_hint: Option<Spanned<Type>>,
     pub expr: Box<Spanned<Expr>>,
 }

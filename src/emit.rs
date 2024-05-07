@@ -66,7 +66,7 @@ fn memory_gen(
         Expr::Id(var_id) => Some(Rc::clone(binding_map.get(var_id).unwrap())),
         Expr::Let(binding_lst, rem_expr) => {
             for binding_obj in binding_lst.iter() {
-                if !binding_map.contains_key(&binding_obj.id) {
+                if !binding_map.contains_key(&binding_obj.id.0) {
                     /* Compile the terms in the let scope */
                     let result_cell = memory_gen(
                         binding_obj.expr.as_ref(),
@@ -74,7 +74,7 @@ fn memory_gen(
                         binding_map,
                         assignment_map,
                     );
-                    binding_map.insert(binding_obj.id.clone(), result_cell.unwrap());
+                    binding_map.insert(binding_obj.id.0.clone(), result_cell.unwrap());
                 } else {
                     panic!("ID in let binding has been reused");
                 }
