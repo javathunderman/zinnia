@@ -35,7 +35,7 @@ pub fn emit(ast: &(Expr, SimpleSpan)) -> Result<ir::Context, calyx_utils::Error>
     ws.components.push(main);
 
     let mut ctx = ir::from_ast::ast_to_ir(ws)?;
-    let main_component = &mut ctx.components[0];
+    let main_component = &mut ctx.components[2];
 
     let mut calyx_builder = ir::Builder::new(main_component, &ctx.lib);
     let mut binding_map: HashMap<String, Rc<RefCell<ir::Cell>>> = HashMap::new();
@@ -89,6 +89,7 @@ fn memory_gen(
 
             let size = operand1.borrow().get_parameter("WIDTH").unwrap(); // assuming the typechecker will catch non-matching bit widths
             let mut res_size = size;
+            let mut drive_go = false;
             let binop_prim = match operator {
                 BinaryOp::Add => builder.add_primitive("adder", "std_add", &[size]),
                 BinaryOp::Sub => builder.add_primitive("subtract", "std_sub", &[size]),
@@ -115,7 +116,15 @@ fn memory_gen(
                 BinaryOp::NotEq => {
                     res_size = 1;
                     builder.add_primitive("neq", "std_neq", &[size])
-                }
+                },
+                BinaryOp::Mul => {
+                    drive_go = true;
+                    builder.add_primitive("mult", "std_fp_mult_pipe", &[size, (size / 2), (size / 2)])
+                },
+                BinaryOp::Div => {
+                    drive_go = true;
+                    builder.add_primitive("div", "std_fp_div_pipe", &[size, (size / 2), (size / 2)])
+                },
                 _ => panic!("Unimplemented binop"),
             };
             build_binop_assignments(
@@ -125,6 +134,7 @@ fn memory_gen(
                 operand2,
                 assignment_map,
                 res_size,
+                drive_go
             );
             memory_gen(&rem_expr_2, builder, binding_map, assignment_map)
         }
@@ -191,6 +201,47 @@ fn build_wire_from_memory(
     new_group.clone()
 }
 
+fn build_wire_to_memory(
+    builder: &mut ir::Builder,
+    src_reg: &Rc<RefCell<ir::Cell>>,
+    vec_dest: &Rc<RefCell<ir::Cell>>,
+    bit_width: u64,
+    vec_index: u64,
+    group_label: &str,
+) -> Rc<RefCell<ir::Group>> {
+    let new_group = builder.add_group(group_label);
+    structure!(builder;
+        let signal_on = constant(1, 1);
+        let write_to_addr = constant(bit_width, vec_index);
+    );
+    let write_en_assn = builder.build_assignment(
+        src_reg.borrow().get("write_en"),
+        signal_on.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let seek_addr = builder.build_assignment(
+        vec_dest.borrow().get("addr0"),
+        write_to_addr.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let value_load = builder.build_assignment(
+        vec_dest.borrow().get("write_data"),
+        src_reg.borrow().get("out"),
+        ir::Guard::True,
+    );
+    let done_signal = builder.build_assignment(
+        new_group.borrow().get("done"),
+        vec_dest.borrow().get("done"),
+        ir::Guard::True,
+    );
+    let mut mut_new_group = new_group.borrow_mut();
+    mut_new_group.assignments.push(write_en_assn);
+    mut_new_group.assignments.push(seek_addr);
+    mut_new_group.assignments.push(value_load);
+    mut_new_group.assignments.push(done_signal);
+    new_group.clone()
+}
+
 fn invoke_scan(
     vec_id: &str,
     builder: &mut ir::Builder,
@@ -229,6 +280,7 @@ fn build_binop_assignments(
     operand2: &Rc<RefCell<ir::Cell>>,
     assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>,
     res_size: u64,
+    drive_go: bool
 ) -> Option<Rc<RefCell<ir::Cell>>> {
     let operand1_reg_name: String = operand1.borrow().name().to_string().clone();
     let operand2_reg_name: String = operand2.borrow().name().to_string().clone();
@@ -244,7 +296,17 @@ fn build_binop_assignments(
         &operand2,
         &mut binop_res_assn,
     );
-
+    if drive_go {
+        structure!(builder;
+            let signal_on = constant(1, 1);
+        );
+        let go_signaling = builder.build_assignment(
+            binop_prim.borrow().get("go"),
+            signal_on.borrow().get("out"),
+            ir::Guard::True,
+        );
+        binop_res_assn.borrow_mut().assignments.insert(0, go_signaling);
+    }
     let seq = ir::Control::seq(vec![
         ir::Control::enable(operand1_assn.to_owned()),
         ir::Control::enable(operand2_assn.to_owned()),
@@ -436,7 +498,7 @@ fn build_wire_assignments(
         signal_on.borrow().get("out"),
         ir::Guard::True,
     );
-    let value_load = builder.build_assignment(
+    let value_load_res = builder.build_assignment(
         new_reg.borrow().get("in"),
         value_load.borrow().get("out"),
         ir::Guard::True,
@@ -448,7 +510,7 @@ fn build_wire_assignments(
     );
     let mut mut_new_group = new_group.borrow_mut();
     mut_new_group.assignments.push(write_en_assn);
-    mut_new_group.assignments.push(value_load);
+    mut_new_group.assignments.push(value_load_res);
     mut_new_group.assignments.push(done_signal);
     new_group.clone()
 }
