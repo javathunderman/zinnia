@@ -6,7 +6,7 @@ mod emit;
 mod parse;
 mod types;
 
-use ariadne::{sources, Color, ColorGenerator, Label, Report, ReportKind};
+use ariadne::{sources, Color, ColorGenerator, Config, Label, Report, ReportKind};
 use calyx_ir as ir;
 use chumsky::prelude::*;
 use std::{io::Write, process::exit};
@@ -132,7 +132,7 @@ fn report_tc_error(filename: &String, start: usize, tc_err: types::Error, src: &
 
     let mut bt = vec![tc_err];
 
-    let mut cg = ColorGenerator::from_state([30000, 15000, 35000], 0.2);
+    let mut cg = ColorGenerator::from_state([30000, 15000, 35000], 0.05);
 
     while let Some(err) = bt.pop() {
         match err {
@@ -234,6 +234,17 @@ fn report_tc_error(filename: &String, start: usize, tc_err: types::Error, src: &
                             .with_message("variable declared here")
                             .with_color(Color::Red),
                     );
+            }
+            types::Error::MismatchedOperands { expr, t_lhs, l_lhs, t_rhs, l_rhs  } => {
+                report = report.with_message("Mismatched operand types!")
+                    .with_label(Label::new((filename.clone(), expr.start()+1..expr.start()+2))
+                        .with_color(Color::Yellow))
+                    .with_label(Label::new((filename.clone(), l_lhs.into_range()))
+                        .with_message(format!("this had type {t_lhs}"))
+                        .with_color(Color::Blue))
+                    .with_label(Label::new((filename.clone(), l_rhs.into_range()))
+                        .with_message(format!("while this had type {t_rhs}"))
+                        .with_color(Color::Green));
             }
         }
     }

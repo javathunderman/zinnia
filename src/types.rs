@@ -84,6 +84,13 @@ pub enum Error {
     ReservedIdentifier {
         id: String,
         loc: Span
+    },
+    MismatchedOperands {
+        expr: Span,
+        t_lhs: Type,
+        l_lhs: Span,
+        t_rhs: Type,
+        l_rhs: Span
     }
 }
 
@@ -440,7 +447,17 @@ fn infer(expr: Spanned<Expr>, ctx: &mut Context) -> Result<SExpr, Error> {
                 }
             };
 
-            let ty = lt.unify(ctx, rt).within(expr.1)?;
+            let err = Error::MismatchedOperands {
+                expr: expr.1,
+                t_lhs: lt.clone(),
+                l_lhs: lhs.span(),
+                t_rhs: rt.clone(),
+                l_rhs: rhs.span()
+            };
+
+            let ty = lt.unify(ctx, rt)
+                .catch_unification(|_, _| err)?;
+                // .within(expr.1)?;
 
             let ret = match op {
                 ast::BinaryOp::Add
@@ -523,8 +540,8 @@ fn infer(expr: Spanned<Expr>, ctx: &mut Context) -> Result<SExpr, Error> {
                     };
 
                     let bind_expr = if let Some(ann_ty) = &type_hint {
-                        let act_ty = infer(*bind.expr.clone(), ctx)
-                            .with_context(|| ContextInfo::WhileChecking(expr.1, ann_ty.clone()))?;
+                        let act_ty = infer(*bind.expr.clone(), ctx)?;
+                            // .with_context(|| ContextInfo::WhileChecking(expr.1, ann_ty.clone()))?;
 
                         act_ty
                             .ty
@@ -697,8 +714,8 @@ impl Context {
 
     fn check(&mut self, decl: &Decl) -> Result<SBinding, Error> {
         let se = self
-            ._check(decl)
-            .with_context(|| ContextInfo::WhileChecking(decl.expr.1, decl.ty.clone()))?;
+            ._check(decl)?;
+            // .with_context(|| ContextInfo::WhileChecking(decl.expr.1, decl.ty.clone()))?;
 
         Ok(SBinding {
             id: decl.id.0.clone(),
