@@ -775,7 +775,13 @@ impl Context {
     }
 
     fn try_solve(&self, id: u64, t: Type) -> Type {
-        self.solved.get(&id).cloned().unwrap_or(t)
+        let ret = self.solved.get(&id).cloned().unwrap_or(t);
+
+        // Follow a chain of unsolved variables
+        match ret {
+            Unsolved(UMonotype { id: uid, .. }) if uid != id => self.try_solve(uid, ret),
+            _ => ret
+        }
     }
 
     fn apply(&self, e: SExpr) -> SExpr {
