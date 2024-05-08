@@ -6,11 +6,11 @@ mod emit;
 mod parse;
 mod types;
 
-use ariadne::{sources, Color, ColorGenerator, Config, Label, Report, ReportKind};
+use ariadne::{sources, Color, ColorGenerator, Label, Report, ReportKind};
 use calyx_ir as ir;
 use chumsky::prelude::*;
 use std::{io::Write, process::exit};
-use types::ContextInfo;
+use std::fs::File;
 
 use ast::*;
 use parse::*;
@@ -47,7 +47,7 @@ fn main() -> Result<(), std::io::Error> {
 
             let _res = match tc {
                 // TODO: typed ast
-                Ok(o) => dbg!(o),
+                Ok(o) => o,
                 Err(err) => {
                     report_tc_error(&filename, loc.start, err, &src);
 
@@ -62,7 +62,17 @@ fn main() -> Result<(), std::io::Error> {
                 .expect("Missing a main!");
 
             let ctx = match emit::emit(&main.expr) {
-                Ok(v) => v,
+                Ok(v) => {
+                    let mut calyx_out = File::create("out/output.futil")?;
+                    let mut json_out = File::create("out/data.json")?;
+                    write!(calyx_out, "import \"primitives/core.futil\";\nimport \"primitives/memories/comb.futil\";");
+
+                    for c in &v.0.components {
+                        ir::Printer::write_component(&c, &mut calyx_out);
+                    }
+                    write!(json_out, "{}", v.1.to_string());
+                    v.0
+                },
                 Err(e) => {
                     let (file, start, end) = {
                         let (file, start, end) = e.location();
@@ -84,13 +94,6 @@ fn main() -> Result<(), std::io::Error> {
                     return Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!"));
                 }
             };
-
-            let out = &mut std::io::stdout();
-
-            for comp in &ctx.components {
-                ir::Printer::write_component(comp, out).expect("stdout io err");
-                writeln!(out)?;
-            }
         };
 
         parse_errs

@@ -323,3 +323,6 @@ Cargo.lock
 __pycache__/
 *.vcd
 sim_build/
+verilog-tests/*.v
+verilog-tests/*.sv
+out/
