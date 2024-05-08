@@ -78,24 +78,19 @@ impl<'a> EmitContext<'a> {
                         BinaryOp::Div => panic!("Invalid binop in if statement"),
                         _ => dbg!("OK binop in if statement (can be made into comb group)"),
                     };
+
                     let condition_expr_res = self.memory_gen_binop(&rem_expr1, &rem_expr2, &op);
-                    let mut control_group = condition_expr_res.1.unwrap();
-                    let right_assn = RefCell::borrow_mut(control_group.borrow_mut())
-                        .assignments
-                        .get(0)
-                        .unwrap()
-                        .to_owned();
-                    let left_assn = RefCell::borrow_mut(control_group.borrow_mut())
-                        .assignments
-                        .get(1)
-                        .unwrap()
-                        .to_owned();
-                    RefCell::borrow_mut(control_group.borrow_mut())
-                        .assignments
-                        .remove(0);
-                    RefCell::borrow_mut(control_group.borrow_mut())
-                        .assignments
-                        .remove(0);
+
+                    let (left_assn, right_assn) = {
+                        let mut rc = condition_expr_res.1.unwrap();
+                        let mut control_group = RefCell::borrow_mut(rc.borrow_mut());
+
+                        (
+                            control_group.assignments.remove(1),
+                            control_group.assignments.remove(0),
+                        )
+                    };
+
                     let true_cell = self.memory_gen(&true_body).unwrap();
                     let false_cell = self.memory_gen(&false_body).unwrap();
 
@@ -104,33 +99,32 @@ impl<'a> EmitContext<'a> {
                         .deref()
                         .borrow_mut()
                         .assignments
-                        .insert(0, left_assn);
-                    cond_group
-                        .deref()
-                        .borrow_mut()
-                        .assignments
-                        .insert(0, right_assn);
+                        .extend([left_assn, right_assn]);
 
                     let true_group = self
                         .assignment_map
                         .get(&true_cell.borrow().name().to_string());
+
                     let false_group = self
                         .assignment_map
                         .get(&false_cell.borrow().name().to_string());
+
                     let true_seq = Box::new(ir::Control::enable(true_group.unwrap().to_owned()));
                     let false_seq = Box::new(ir::Control::enable(false_group.unwrap().to_owned()));
+
                     let seq = ir::Control::if_(
                         condition_expr_res.0.unwrap().borrow().get("out"),
                         Some(cond_group),
                         true_seq,
                         false_seq,
                     );
+
                     self.builder.component.control = Rc::new(seq.into());
+
                     None
                 }
                 _ => panic!("If statement did not have binop that is a comparator"),
             },
-            _ => None,
         }
     }
 
@@ -203,11 +197,12 @@ impl<'a> EmitContext<'a> {
                     &[size, (size / 2), (size / 2)],
                 )
             }
-            _ => panic!("Unimplemented binop"),
         };
+
         let control_group =
             self.build_binop_assignments(&binop_prim, &operand1, &operand2, res_size, drive_go);
         self.memory_gen(&rem_expr_2);
+
         (Some(binop_prim), control_group.0, control_group.1)
     }
 
@@ -245,14 +240,13 @@ impl<'a> EmitContext<'a> {
             ir::Guard::True,
         );
 
-        new_group
-            .deref()
-            .borrow_mut()
-            .assignments
-            .push(write_en_assn);
-        new_group.deref().borrow_mut().assignments.push(seek_addr);
-        new_group.deref().borrow_mut().assignments.push(value_load);
-        new_group.deref().borrow_mut().assignments.push(done_signal);
+        new_group.deref().borrow_mut().assignments.extend([
+            write_en_assn,
+            seek_addr,
+            value_load,
+            done_signal,
+        ]);
+
         new_group.clone()
     }
 
@@ -290,14 +284,13 @@ impl<'a> EmitContext<'a> {
             ir::Guard::True,
         );
 
-        new_group
-            .deref()
-            .borrow_mut()
-            .assignments
-            .push(write_en_assn);
-        new_group.deref().borrow_mut().assignments.push(seek_addr);
-        new_group.deref().borrow_mut().assignments.push(value_load);
-        new_group.deref().borrow_mut().assignments.push(done_signal);
+        new_group.deref().borrow_mut().assignments.extend([
+            write_en_assn,
+            seek_addr,
+            value_load,
+            done_signal,
+        ]);
+
         new_group.clone()
     }
 
@@ -331,13 +324,10 @@ impl<'a> EmitContext<'a> {
         res_size: u64,
         drive_go: bool,
     ) -> (Option<Rc<RefCell<ir::Group>>>, Rc<RefCell<ir::Cell>>) {
-        let operand1_reg_name: String = operand1.borrow().name().to_string().clone();
-        let operand2_reg_name: String = operand2.borrow().name().to_string().clone();
-        let local_assn_map = self.assignment_map.to_owned();
-        let operand1_assn: &Rc<RefCell<ir::Group>> =
-            local_assn_map.get(&operand1_reg_name).unwrap();
-        let operand2_assn: &Rc<RefCell<ir::Group>> =
-            local_assn_map.get(&operand2_reg_name).unwrap();
+        let operand1_reg_name = operand1.borrow().name().to_string().clone();
+        let operand2_reg_name = operand2.borrow().name().to_string().clone();
+        let operand1_assn = self.assignment_map.get(&operand1_reg_name).unwrap().clone();
+        let operand2_assn = self.assignment_map.get(&operand2_reg_name).unwrap().clone();
         let binop_res = self
             .builder
             .add_primitive("res_binop", "std_reg", &[res_size]);
@@ -381,45 +371,44 @@ impl<'a> EmitContext<'a> {
         ty: &Type,
         lst: &[Spanned<Prim>],
     ) -> Option<Rc<RefCell<ir::Cell>>> {
+        let Type::VecT(VecT { elem_t, count }) = ty else {
+            panic!("Vector not vector typed!")
+        };
+
+        let Type::Num(NType { sign, width }) = elem_t.as_ref() else {
+            panic!("Vector contains non-numeric elements!");
+        };
+
         let mut data_vals: Vec<i64> = vec![];
         let mut max_width: u8 = 0;
         let mut is_signed_number = false;
         for (exp, _) in lst.iter() {
             match exp {
-                Prim::NumI(size_opt, signed_val, unsigned_int_val) => {
-                    let n_size = size_opt.as_ref().unwrap_or(&NType {
-                        sign: false,
-                        width: 0,
-                    });
-                    if n_size.sign && !is_signed_number {
-                        is_signed_number = true;
-                    }
-                    if n_size.width > max_width {
-                        max_width = n_size.width;
-                    }
+                Prim::NumI(_, signed_val, unsigned_int_val) => {
+                    is_signed_number |= *sign;
+
+                    max_width = max_width.max(*width);
+
                     let int_val = *unsigned_int_val as i64;
+
                     if *signed_val {
                         data_vals.push(-int_val);
                     } else {
                         data_vals.push(int_val);
                     }
                 }
-                Prim::NumF(_float_val) => {
-                    println!("Float element in vector compilation is unimplemented")
-                }
                 Prim::Bool(b_val) => {
                     max_width = 1;
-                    if *b_val {
-                        data_vals.push(1);
-                    } else {
-                        data_vals.push(0);
-                    }
+                    data_vals.push(*b_val as i64);
+                }
+                Prim::NumF(_float_val) => {
+                    println!("Float element in vector compilation is unimplemented")
                 }
             }
         }
 
         if max_width == 0 {
-            max_width = 8;
+            panic!("Max width of 0! Is the vector empty?");
         }
 
         let vec_component = self.builder.add_primitive(
@@ -427,6 +416,7 @@ impl<'a> EmitContext<'a> {
             "comb_mem_d1",
             &[max_width as u64, lst.len() as u64, max_width as u64],
         );
+
         vec_component
             .deref()
             .borrow_mut()
@@ -443,12 +433,27 @@ impl<'a> EmitContext<'a> {
                 }
             }
         });
+
         self.data_json
             .as_object_mut()
             .unwrap()
             .append(data_file.as_object_mut().unwrap());
+
         dbg!(self.data_json.to_string());
+
         return Some(vec_component);
+    }
+
+    fn add_reg(&mut self, val: u64, width: u64) -> Rc<RefCell<ir::Cell>> {
+        let new_reg = self
+            .builder
+            .add_primitive("reg", "std_reg", &[width as u64]);
+
+        let assignment = self.memory_gen_assignment(Some(val), width, &new_reg, None);
+        self.assignment_map
+            .insert(new_reg.borrow().name().to_string(), assignment);
+
+        new_reg
     }
 
     // TODO: generate assignments after register allocation
@@ -458,32 +463,23 @@ impl<'a> EmitContext<'a> {
         };
 
         match prim_val {
-            Prim::NumI(size_opt, signed, int_val) => {
+            Prim::NumI(_, signed, int_val) => {
                 // TODO: Figure out how to handle signed ints since constant! takes u64s
                 if signed {
                     let new_reg = self
                         .builder
                         .add_primitive("reg", "std_reg", &[*width as u64]);
+
                     Some(new_reg)
                 } else {
-                    let new_reg = self
-                        .builder
-                        .add_primitive("reg", "std_reg", &[*width as u64]);
-                    let reg_name = new_reg.borrow().name().to_string();
-                    let assignment =
-                        self.memory_gen_assignment(Some(int_val), *width as u64, &new_reg, None);
-                    self.assignment_map.insert(reg_name, assignment);
-                    Some(new_reg)
+                    Some(self.add_reg(int_val, *width as u64))
                 }
             }
-            Prim::Bool(_b_val) => {
-                let new_reg = self.builder.add_primitive("reg", "std_reg", &[1]);
-                let reg_name = new_reg.borrow().name().to_string();
-                let assignment = self.memory_gen_assignment(Some(1), 1u64, &new_reg, None);
-                self.assignment_map.insert(reg_name, assignment);
-                Some(new_reg)
-            }
-            Prim::NumF(_f_val) => Some(self.builder.add_primitive("reg", "std_reg", &[8])), // Warning: floats are not preserved in compilation
+
+            Prim::Bool(_b_val) => Some(self.add_reg(1, 1)),
+
+            // Warning: floats are not preserved in compilation
+            Prim::NumF(_f_val) => Some(self.builder.add_primitive("reg", "std_reg", &[8])),
         }
     }
 
@@ -501,24 +497,27 @@ impl<'a> EmitContext<'a> {
             assert!(src_reg_opt.is_none());
         }
         let mut assignment_label: String = new_reg.borrow().name().to_string();
-        match src_reg_opt {
+
+        let signal_on = self.builder.add_constant(1, 1);
+
+        let value_load = match src_reg_opt {
             Some(src_reg_raw) => {
-                structure!(self.builder;
-                    let signal_on = constant(1, 1);
-                );
                 let value_load = src_reg_raw;
                 assignment_label.push_str("_reg_assn");
-                self.build_wire_assignments(new_reg, &signal_on, value_load, &assignment_label)
+
+                value_load.clone()
             }
             None => {
-                structure!(self.builder;
-                    let signal_on = constant(1, 1);
-                    let value_load = constant(int_val.unwrap(), size);
+                structure!((self.builder);
+                    let value_load = constant(int_val.unwrap(),size);
                 );
                 assignment_label.push_str("_load");
-                self.build_wire_assignments(new_reg, &signal_on, &value_load, &assignment_label)
+
+                value_load
             }
-        }
+        };
+
+        self.build_wire_assignments(new_reg, &signal_on, &value_load, &assignment_label)
     }
 
     fn build_wire_assignments(
@@ -528,7 +527,8 @@ impl<'a> EmitContext<'a> {
         value_load: &Rc<RefCell<ir::Cell>>,
         group_label: &str,
     ) -> Rc<RefCell<ir::Group>> {
-        let mut new_group = self.builder.add_group(group_label);
+        let new_group = self.builder.add_group(group_label);
+
         let write_en_assn = self.builder.build_assignment(
             new_reg.borrow().get("write_en"),
             signal_on.borrow().get("out"),
@@ -545,20 +545,17 @@ impl<'a> EmitContext<'a> {
             ir::Guard::True,
         );
 
-        new_group
-            .deref()
-            .borrow_mut()
-            .assignments
-            .push(write_en_assn);
-        new_group
-            .deref()
-            .borrow_mut()
-            .assignments
-            .push(value_load_res);
-        new_group.deref().borrow_mut().assignments.push(done_signal);
+        new_group.deref().borrow_mut().assignments.extend([
+            write_en_assn,
+            value_load_res,
+            done_signal,
+        ]);
+
         let returnable = new_group.clone();
+
         self.assignment_map
             .insert(new_reg.borrow().name().to_string(), new_group);
+
         returnable
     }
 
@@ -574,18 +571,17 @@ impl<'a> EmitContext<'a> {
             left_value_load.borrow().get("out"),
             ir::Guard::True,
         );
+
         let right_value_load_assn: Assignment<ir::Nothing> = self.builder.build_assignment(
             new_reg.borrow().get("right"),
             right_value_load.borrow().get("out"),
             ir::Guard::True,
         );
 
-        RefCell::borrow_mut(prepend_group)
-            .assignments
-            .insert(0, left_value_load_assn);
-        RefCell::borrow_mut(prepend_group)
-            .assignments
-            .insert(1, right_value_load_assn);
+        let mut prepend_group = RefCell::borrow_mut(prepend_group);
+
+        prepend_group.assignments.insert(0, left_value_load_assn);
+        prepend_group.assignments.insert(1, right_value_load_assn);
     }
 }
 
