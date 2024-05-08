@@ -70,6 +70,12 @@ pub struct VecT {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VecTFrame<A> {
+    pub elem_t: A,
+    pub count: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Num(NType),
     Bool,
@@ -80,6 +86,65 @@ pub enum Type {
     Unsolved(UMonotype),
     // forall a. ...
     ForAll(UMonotype, Box<Type>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TypeFrame<A> {
+    Num(NType),
+    Bool,
+    VecT(VecTFrame<A>),
+    // Ident(&'a str, Vec<Spanned<Type<'a>>>),
+    Arrow(Vec<A>, A),
+    Unit,
+    Unsolved(UMonotype),
+    // forall a. ...
+    ForAll(UMonotype, A),
+}
+
+impl From<TypeFrame<Type>> for Type {
+    fn from(value: TypeFrame<Type>) -> Self {
+        match value {
+            TypeFrame::Num(n) => Type::Num(n),
+            TypeFrame::Bool => Type::Bool,
+            TypeFrame::VecT(VecTFrame { elem_t, count }) => Type::VecT(VecT { elem_t: Box::new(elem_t), count }),
+            TypeFrame::Arrow(v, r) => Type::Arrow(v, Box::new(r)),
+            TypeFrame::Unit => Type::Unit,
+            TypeFrame::Unsolved(u) => Type::Unsolved(u),
+            TypeFrame::ForAll(u, t) => Type::ForAll(u, Box::new(t)),
+        }
+    }
+}
+
+impl recursion::MappableFrame for TypeFrame<recursion::PartiallyApplied> {
+    type Frame<X> = TypeFrame<X>;
+
+    fn map_frame<A, B>(input: Self::Frame<A>, mut f: impl FnMut(A) -> B) -> Self::Frame<B> {
+        match input {
+            TypeFrame::Num(n) => TypeFrame::Num(n),
+            TypeFrame::Bool => TypeFrame::Bool,
+            TypeFrame::VecT(VecTFrame { elem_t, count }) => TypeFrame::VecT(VecTFrame { elem_t: f(elem_t), count }),
+            TypeFrame::Arrow(args, t) => TypeFrame::Arrow(args.into_iter().map(|a: A| f(a)).collect() , f(t)),
+            TypeFrame::Unit => TypeFrame::Unit,
+            TypeFrame::Unsolved(u) => TypeFrame::Unsolved(u),
+            TypeFrame::ForAll(u, t) => TypeFrame::ForAll(u, f(t)),
+        }
+    }
+}
+
+impl<'a> recursion::Collapsible for &'a Type {
+    type FrameToken = TypeFrame<recursion::PartiallyApplied>;
+
+    fn into_frame(self) -> <Self::FrameToken as recursion::MappableFrame>::Frame<Self> {
+        match self {
+            Type::Num(n) => TypeFrame::Num(*n),
+            Type::Bool => TypeFrame::Bool,
+            Type::VecT(VecT { elem_t, count }) => TypeFrame::VecT(VecTFrame { elem_t: elem_t.as_ref(), count: *count }),
+            Type::Arrow(args, res) => TypeFrame::Arrow(args.iter().collect::<Vec<_>>(), res),
+            Type::Unit => TypeFrame::Unit,
+            Type::Unsolved(u) => TypeFrame::Unsolved(*u),
+            Type::ForAll(u, t) => TypeFrame::ForAll(*u, t.as_ref())
+        }
+    }
 }
 
 impl fmt::Display for Type {

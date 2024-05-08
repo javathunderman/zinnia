@@ -3,6 +3,8 @@
 use std::collections::hash_map::{Entry, OccupiedEntry};
 use std::collections::HashMap;
 
+use recursion::CollapsibleExt;
+
 use crate::ast::{Decl, Expr, Type::Unsolved};
 use crate::{ast, NType, Span, Spanned, Subtype, Type, UMonotype, UNum, VecT};
 
@@ -231,24 +233,12 @@ impl Type {
 
     // Substitute subtypes with matching id with a new type
     fn sub(&self, t_new: UMonotype) -> Type {
-        match self {
-            Type::VecT(VecT { elem_t, count }) => VecT {
-                elem_t: Box::new(elem_t.sub(t_new)),
-                count: *count,
+        self.collapse_frames(|f| {
+            match f {
+                ast::TypeFrame::Unsolved(UMonotype { id, .. }) if id == t_new.id => t_new.into(),
+                t => t.into(),
             }
-            .into(),
-
-            Type::Arrow(params, ret) => Type::Arrow(
-                params.iter().map(|p| p.sub(t_new)).collect(),
-                Box::new(ret.sub(t_new)),
-            ),
-
-            Unsolved(UMonotype { id, .. }) if *id == t_new.id => t_new.into(),
-
-            Type::ForAll(a, t) => Type::ForAll(a.clone(), Box::new(t.sub(t_new))),
-
-            _ => self.clone(),
-        }
+        })
     }
 
     fn assert_numeric(&self) -> Result<Type, Error> {
@@ -536,7 +526,7 @@ fn infer(expr: Spanned<Expr>, ctx: &mut Context) -> Result<SExpr, Error> {
                         id: (id, loc),
                         type_hint,
                         expr,
-                    } = dbg!(bind);
+                    } = bind;
 
                     let reserved = ["scan", "filter"];
 
@@ -746,7 +736,7 @@ impl Context {
 
         inferred.ty.clone().unify(self, decl.ty.0.clone())?;
 
-        Ok(self.apply(inferred))
+        Ok(dbg!(self.apply(inferred)))
     }
 
     fn new_unsolved(&mut self, s: Subtype) -> UMonotype {
@@ -833,23 +823,12 @@ impl Context {
     }
 
     fn sub(&self, ty: Type) -> Type {
-        match ty {
-            // Try to replace if it's a simple unsolved variable
-            Unsolved(UMonotype { id, st: _ }) => self.try_solve(id, ty),
-
-            // For parametric types, recurse inwards
-            Type::VecT(VecT { elem_t, count }) => Type::VecT(VecT {
-                elem_t: Box::new(self.sub(*elem_t)),
-                count,
-            }),
-            Type::Arrow(params, res) => Type::Arrow(
-                params.iter().map(|p| self.sub(p.clone())).collect(),
-                Box::new(self.sub(*res)),
-            ),
-
-            // Otherwise we've already done all we can
-            ty => ty,
-        }
+        ty.collapse_frames(|f| {
+            match f {
+                ast::TypeFrame::Unsolved(UMonotype { id, st: _ }) => self.try_solve(id, ty.clone()),
+                t => t.into(),
+            }
+        })
     }
 }
 
