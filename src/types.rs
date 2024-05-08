@@ -714,8 +714,8 @@ impl Context {
 
     fn check(&mut self, decl: &Decl) -> Result<SBinding, Error> {
         let se = self
-            ._check(decl)?;
-            // .with_context(|| ContextInfo::WhileChecking(decl.expr.1, decl.ty.clone()))?;
+            ._check(decl)
+            .with_context(|| ContextInfo::WhileChecking(decl.expr.1, decl.ty.clone()))?;
 
         Ok(SBinding {
             id: decl.id.0.clone(),
