@@ -5,7 +5,7 @@ use chumsky::span::SimpleSpan;
 use ir::Assignment;
 use serde_json::json;
 use std::borrow::BorrowMut;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use crate::{ast::*, Spanned};
@@ -26,7 +26,7 @@ pub fn emit(ast: &(Expr, SimpleSpan)) -> Result<(ir::Context, serde_json::Value)
 
     let mut ws = frontend::Workspace::construct_with_all_deps::<false>(
         paths,
-        Path::canonicalize(Path::new("./../calyx"))
+        Path::canonicalize(&Path::join(cargo, "calyx"))
             .expect("Missing calyx! Did you clone the submodule?")
             .as_path(),
     )?;
