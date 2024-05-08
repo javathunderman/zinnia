@@ -1,16 +1,16 @@
 use calyx_frontend as frontend;
 use calyx_ir as ir;
 use calyx_ir::structure;
-use chumsky::span::SimpleSpan;
 use ir::Assignment;
 use serde_json::json;
 use std::borrow::BorrowMut;
 use std::path::{Path, PathBuf};
 use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
+use crate::types::{SExpr, SExpr_};
 use crate::{ast::*, Spanned};
 
-pub fn emit(ast: &(Expr, SimpleSpan)) -> Result<(ir::Context, serde_json::Value), calyx_utils::Error> {
+pub fn emit(ast: &SExpr) -> Result<(ir::Context, serde_json::Value), calyx_utils::Error> {
     let cargo = Path::new(env!("CARGO_MANIFEST_DIR"));
 
     let paths = [
@@ -42,18 +42,31 @@ pub fn emit(ast: &(Expr, SimpleSpan)) -> Result<(ir::Context, serde_json::Value)
     let mut calyx_builder = ir::Builder::new(main_component, &ctx.lib);
     let mut binding_map: HashMap<String, Rc<RefCell<ir::Cell>>> = HashMap::new();
     let mut assignment_map: HashMap<String, Rc<RefCell<ir::Group>>> = HashMap::new();
-    let mut data_json = json!({ });
+    let mut data_json = json!({});
     let res_register = memory_gen(
         &ast,
         &mut calyx_builder,
         &mut binding_map,
         &mut assignment_map,
-        &mut data_json
-    ).expect("nope");
+        &mut data_json,
+    )
+    .expect("nope");
     let output_width = res_register.borrow().get_parameter("WIDTH").unwrap();
-    let mut output_vec = calyx_builder.add_primitive("output_mem", "comb_mem_d1", &[output_width, 1, output_width]);
-    RefCell::borrow_mut(output_vec.borrow_mut()).add_attribute(ir::Attribute::Bool(ir::BoolAttr::External), 1);
-    let output_write_group = build_wire_to_memory(&mut calyx_builder, &res_register, &output_vec, output_width, 0, "write_output");
+    let mut output_vec = calyx_builder.add_primitive(
+        "output_mem",
+        "comb_mem_d1",
+        &[output_width, 1, output_width],
+    );
+    RefCell::borrow_mut(output_vec.borrow_mut())
+        .add_attribute(ir::Attribute::Bool(ir::BoolAttr::External), 1);
+    let output_write_group = build_wire_to_memory(
+        &mut calyx_builder,
+        &res_register,
+        &output_vec,
+        output_width,
+        0,
+        "write_output",
+    );
     let mut output_reg_json = json!({
             output_vec.borrow().name().to_string() : {
                 "data": [0],
@@ -65,114 +78,185 @@ pub fn emit(ast: &(Expr, SimpleSpan)) -> Result<(ir::Context, serde_json::Value)
             }
         }
     );
-    data_json.as_object_mut().unwrap().append(output_reg_json.as_object_mut().unwrap());
-    { let mut seq = RefCell::borrow_mut(&calyx_builder.component.control);
-    match &mut *seq {
-        ir::Control::Seq(seq_lst) => seq_lst.stmts.push(ir::Control::enable(output_write_group)),
-        _ => panic!("no support for non-sequential programs yet (other than parscan)")
-    } }
+    data_json
+        .as_object_mut()
+        .unwrap()
+        .append(output_reg_json.as_object_mut().unwrap());
+    {
+        let mut seq = RefCell::borrow_mut(&calyx_builder.component.control);
+        match &mut *seq {
+            ir::Control::Seq(seq_lst) => {
+                seq_lst.stmts.push(ir::Control::enable(output_write_group))
+            }
+            _ => panic!("no support for non-sequential programs yet (other than parscan)"),
+        }
+    }
     return Ok((ctx, data_json));
 }
 
 fn memory_gen(
-    ast: &(Expr, SimpleSpan),
+    ast: &SExpr,
     builder: &mut ir::Builder,
     binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>,
     assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>,
     data_json: &mut serde_json::Value,
 ) -> Option<Rc<RefCell<ir::Cell>>> {
-    let (parsed_expr, _debug_span) = ast;
-    match parsed_expr {
-        Expr::Value(val) => memory_gen_value(val.clone(), builder, assignment_map, data_json),
-        Expr::Id(var_id) => Some(Rc::clone(binding_map.get(var_id).unwrap())),
-        Expr::Let(binding_lst, rem_expr) => {
+    match &ast.expr {
+        SExpr_::Value(val) => {
+            memory_gen_value(&ast.ty, val.clone(), builder, assignment_map, data_json)
+        }
+        SExpr_::Id(var_id) => Some(Rc::clone(binding_map.get(var_id).unwrap())),
+        SExpr_::Let(binding_lst, rem_expr) => {
             for binding_obj in binding_lst.iter() {
-                if !binding_map.contains_key(&binding_obj.id.0) {
+                if !binding_map.contains_key(&binding_obj.id) {
                     /* Compile the terms in the let scope */
                     let result_cell = memory_gen(
-                        binding_obj.expr.as_ref(),
+                        &binding_obj.expr,
                         builder,
                         binding_map,
                         assignment_map,
-                        data_json
+                        data_json,
                     );
-                    binding_map.insert(binding_obj.id.0.clone(), result_cell.unwrap());
+                    binding_map.insert(binding_obj.id.clone(), result_cell.unwrap());
                 } else {
                     panic!("ID in let binding has been reused");
                 }
             }
             /* Compile terms outside of the let scope */
-            memory_gen(rem_expr, builder, binding_map, assignment_map, data_json)
+            memory_gen(
+                rem_expr.as_ref(),
+                builder,
+                binding_map,
+                assignment_map,
+                data_json,
+            )
         }
-        Expr::Binary(rem_expr_1, operator, rem_expr_2) => Some(memory_gen_binop(rem_expr_1, binding_map, rem_expr_2, operator, builder, assignment_map, data_json).2),
-        Expr::Call(func_expr, func_args) => match &func_expr.as_ref().0 {
-            Expr::Id(func_name) => match func_name.as_str() {
-                "filter" => match &func_args.0.get(0).unwrap().0 {
-                    Expr::Id(vec_id) => {
+        SExpr_::Binary(rem_expr_1, operator, rem_expr_2) => Some(
+            memory_gen_binop(
+                rem_expr_1.as_ref(),
+                binding_map,
+                rem_expr_2.as_ref(),
+                &operator,
+                builder,
+                assignment_map,
+                data_json,
+            )
+            .2,
+        ),
+        SExpr_::Call(func_expr, func_args) => match &func_expr.expr {
+            SExpr_::Id(func_name) => match func_name.as_str() {
+                "filter" => {
+                    if let Some(SExpr_::Id(vec_id)) = &func_args.get(0).map(|x| &x.expr) {
                         Some(invoke_filter(&vec_id, builder, binding_map, assignment_map))
+                    } else {
+                        panic!("Not a vector variable, try using a let binding")
                     }
-                    _ => panic!("Not a vector variable, try using a let binding"),
-                },
-                "scan" => match &func_args.0.get(0).unwrap().0 {
-                    Expr::Id(vec_id) => {
+                }
+                "scan" => {
+                    if let Some(SExpr_::Id(vec_id)) = &func_args.get(0).map(|x| &x.expr) {
                         Some(invoke_scan(&vec_id, builder, binding_map, assignment_map))
+                    } else {
+                        panic!("Not a vector variable, try using a let binding")
                     }
-                    _ => panic!("Not a vector variable, try using a let binding"),
-                },
+                }
                 _ => panic!("Unknown function name in call"),
             },
-            _ => panic!("No support for user defined functions at the moment"),
+            _ => todo!("Indirect function references not yet implemented!"),
         },
-        Expr::If(condition, true_body, false_body) => {
-            match &condition.as_ref().0  {
-                Expr::Binary(rem_expr1, op, rem_expr2) => {
-                    match op {
-                        BinaryOp::Add => panic!("Invalid binop in if statement"),
-                        BinaryOp::Sub => panic!("Invalid binop in if statement"),
-                        BinaryOp::Mul => panic!("Invalid binop in if statement"),
-                        BinaryOp::Div => panic!("Invalid binop in if statement"),
-                        _ => dbg!("OK binop in if statement (can be made into comb group)")
-                    };
-                    let condition_expr_res = memory_gen_binop(rem_expr1, binding_map, rem_expr2, op, builder, assignment_map, data_json);
-                    let mut control_group = condition_expr_res.1.unwrap();
-                    let right_assn = RefCell::borrow_mut(control_group.borrow_mut()).assignments.get(0).unwrap().to_owned();
-                    let left_assn = RefCell::borrow_mut(control_group.borrow_mut()).assignments.get(1).unwrap().to_owned();
-                    RefCell::borrow_mut(control_group.borrow_mut()).assignments.remove(0);
-                    RefCell::borrow_mut(control_group.borrow_mut()).assignments.remove(0);
-                    let true_cell = memory_gen(&true_body, builder, binding_map, assignment_map, data_json).unwrap();
-                    let false_cell = memory_gen(&false_body, builder, binding_map, assignment_map, data_json).unwrap();
+        SExpr_::If(condition, true_body, false_body) => match &condition.expr {
+            SExpr_::Binary(rem_expr1, op, rem_expr2) => {
+                match op {
+                    BinaryOp::Add => panic!("Invalid binop in if statement"),
+                    BinaryOp::Sub => panic!("Invalid binop in if statement"),
+                    BinaryOp::Mul => panic!("Invalid binop in if statement"),
+                    BinaryOp::Div => panic!("Invalid binop in if statement"),
+                    _ => dbg!("OK binop in if statement (can be made into comb group)"),
+                };
+                let condition_expr_res = memory_gen_binop(
+                    &rem_expr1,
+                    binding_map,
+                    &rem_expr2,
+                    &op,
+                    builder,
+                    assignment_map,
+                    data_json,
+                );
+                let mut control_group = condition_expr_res.1.unwrap();
+                let right_assn = RefCell::borrow_mut(control_group.borrow_mut())
+                    .assignments
+                    .get(0)
+                    .unwrap()
+                    .to_owned();
+                let left_assn = RefCell::borrow_mut(control_group.borrow_mut())
+                    .assignments
+                    .get(1)
+                    .unwrap()
+                    .to_owned();
+                RefCell::borrow_mut(control_group.borrow_mut())
+                    .assignments
+                    .remove(0);
+                RefCell::borrow_mut(control_group.borrow_mut())
+                    .assignments
+                    .remove(0);
+                let true_cell =
+                    memory_gen(&true_body, builder, binding_map, assignment_map, data_json)
+                        .unwrap();
+                let false_cell =
+                    memory_gen(&false_body, builder, binding_map, assignment_map, data_json)
+                        .unwrap();
 
-                    let cond_group = builder.add_comb_group("if_expr_c");
-                    cond_group.deref().borrow_mut().assignments.insert(0, left_assn);
-                    cond_group.deref().borrow_mut().assignments.insert(0, right_assn);
+                let cond_group = builder.add_comb_group("if_expr_c");
+                cond_group
+                    .deref()
+                    .borrow_mut()
+                    .assignments
+                    .insert(0, left_assn);
+                cond_group
+                    .deref()
+                    .borrow_mut()
+                    .assignments
+                    .insert(0, right_assn);
 
-                    let true_group = assignment_map.get(&true_cell.borrow().name().to_string());
-                    let false_group = assignment_map.get(&false_cell.borrow().name().to_string());
-                    let true_seq = Box::new(ir::Control::enable(true_group.unwrap().to_owned()));
-                    let false_seq = Box::new(ir::Control::enable(false_group.unwrap().to_owned()));
-                    let seq = ir::Control::if_(condition_expr_res.0.unwrap().borrow().get("out"),
-                                                Some(cond_group),
-                                                true_seq,
-                                                false_seq);
-                    builder.component.control = Rc::new(seq.into());
-                    None
-                },
-                _ => panic!("If statement did not have binop that is a comparator")
+                let true_group = assignment_map.get(&true_cell.borrow().name().to_string());
+                let false_group = assignment_map.get(&false_cell.borrow().name().to_string());
+                let true_seq = Box::new(ir::Control::enable(true_group.unwrap().to_owned()));
+                let false_seq = Box::new(ir::Control::enable(false_group.unwrap().to_owned()));
+                let seq = ir::Control::if_(
+                    condition_expr_res.0.unwrap().borrow().get("out"),
+                    Some(cond_group),
+                    true_seq,
+                    false_seq,
+                );
+                builder.component.control = Rc::new(seq.into());
+                None
             }
-
-        }
+            _ => panic!("If statement did not have binop that is a comparator"),
+        },
         _ => None,
     }
 }
 
-fn memory_gen_binop(rem_expr_1: &Box<(Expr, SimpleSpan)>, binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>, rem_expr_2: &Box<(Expr, SimpleSpan)>, operator: &BinaryOp, builder: &mut ir::Builder, assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>, data_json: &mut serde_json::Value) -> (Option<Rc<RefCell<ir::Cell>>>, Option<Rc<RefCell<ir::Group>>>, Rc<RefCell<ir::Cell>>) {
-    let operand1 : &Rc<RefCell<ir::Cell>> = match &rem_expr_1.as_ref().0 {
-        Expr::Id(var_name) => binding_map.get(var_name).unwrap(),
+fn memory_gen_binop(
+    rem_expr_1: &SExpr,
+    binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>,
+    rem_expr_2: &SExpr,
+    operator: &BinaryOp,
+    builder: &mut ir::Builder,
+    assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>,
+    data_json: &mut serde_json::Value,
+) -> (
+    Option<Rc<RefCell<ir::Cell>>>,
+    Option<Rc<RefCell<ir::Group>>>,
+    Rc<RefCell<ir::Cell>>,
+) {
+    let operand1 : &Rc<RefCell<ir::Cell>> = match &rem_expr_1.expr {
+        SExpr_::Id(var_name) => binding_map.get(var_name.as_str()).unwrap(),
         _ => panic!("Cannot compile inlined expressions right now, use a let binding and create the var first")
     };
-    let operand2 : &Rc<RefCell<ir::Cell>> = match &rem_expr_2.as_ref().0 {
-        Expr::Id(var_name) => binding_map.get(var_name).unwrap(),
-        _ => {dbg!(&rem_expr_2.as_ref().0);
+    let operand2: &Rc<RefCell<ir::Cell>> = match &rem_expr_2.expr {
+        SExpr_::Id(var_name) => binding_map.get(var_name.as_str()).unwrap(),
+        _ => {
+            dbg!(&rem_expr_2);
             panic!("Cannot compile inlined expressions right now, use a let binding and create the var first")
         }
     };
@@ -207,15 +291,15 @@ fn memory_gen_binop(rem_expr_1: &Box<(Expr, SimpleSpan)>, binding_map: &mut Hash
         BinaryOp::NotEq => {
             res_size = 1;
             builder.add_primitive("neq", "std_neq", &[size])
-        },
+        }
         BinaryOp::Mul => {
             drive_go = true;
             builder.add_primitive("mult", "std_fp_mult_pipe", &[size, (size / 2), (size / 2)])
-        },
+        }
         BinaryOp::Div => {
             drive_go = true;
             builder.add_primitive("div", "std_fp_div_pipe", &[size, (size / 2), (size / 2)])
-        },
+        }
         _ => panic!("Unimplemented binop"),
     };
     let control_group = build_binop_assignments(
@@ -225,7 +309,7 @@ fn memory_gen_binop(rem_expr_1: &Box<(Expr, SimpleSpan)>, binding_map: &mut Hash
         operand2,
         assignment_map,
         res_size,
-        drive_go
+        drive_go,
     );
     memory_gen(&rem_expr_2, builder, binding_map, assignment_map, data_json);
     (Some(binop_prim), control_group.0, control_group.1)
@@ -265,7 +349,11 @@ fn build_wire_from_memory(
         ir::Guard::True,
     );
 
-    new_group.deref().borrow_mut().assignments.push(write_en_assn);
+    new_group
+        .deref()
+        .borrow_mut()
+        .assignments
+        .push(write_en_assn);
     new_group.deref().borrow_mut().assignments.push(seek_addr);
     new_group.deref().borrow_mut().assignments.push(value_load);
     new_group.deref().borrow_mut().assignments.push(done_signal);
@@ -306,7 +394,11 @@ fn build_wire_to_memory(
         ir::Guard::True,
     );
 
-    new_group.deref().borrow_mut().assignments.push(write_en_assn);
+    new_group
+        .deref()
+        .borrow_mut()
+        .assignments
+        .push(write_en_assn);
     new_group.deref().borrow_mut().assignments.push(seek_addr);
     new_group.deref().borrow_mut().assignments.push(value_load);
     new_group.deref().borrow_mut().assignments.push(done_signal);
@@ -351,7 +443,7 @@ fn build_binop_assignments(
     operand2: &Rc<RefCell<ir::Cell>>,
     assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>,
     res_size: u64,
-    drive_go: bool
+    drive_go: bool,
 ) -> (Option<Rc<RefCell<ir::Group>>>, Rc<RefCell<ir::Cell>>) {
     let operand1_reg_name: String = operand1.borrow().name().to_string().clone();
     let operand2_reg_name: String = operand2.borrow().name().to_string().clone();
@@ -359,8 +451,14 @@ fn build_binop_assignments(
     let operand1_assn: &Rc<RefCell<ir::Group>> = local_assn_map.get(&operand1_reg_name).unwrap();
     let operand2_assn: &Rc<RefCell<ir::Group>> = local_assn_map.get(&operand2_reg_name).unwrap();
     let binop_res = builder.add_primitive("res_binop", "std_reg", &[res_size]);
-    let mut binop_res_assn =
-        memory_gen_assignment(builder, None, res_size, &binop_res, Some(binop_prim), assignment_map);
+    let mut binop_res_assn = memory_gen_assignment(
+        builder,
+        None,
+        res_size,
+        &binop_res,
+        Some(binop_prim),
+        assignment_map,
+    );
     build_wire_assignments_comb(
         builder,
         binop_prim,
@@ -377,7 +475,11 @@ fn build_binop_assignments(
             signal_on.borrow().get("out"),
             ir::Guard::True,
         );
-        binop_res_assn.deref().borrow_mut().assignments.insert(0, go_signaling);
+        binop_res_assn
+            .deref()
+            .borrow_mut()
+            .assignments
+            .insert(0, go_signaling);
     }
     let seq = ir::Control::seq(vec![
         ir::Control::enable(operand1_assn.to_owned()),
@@ -390,21 +492,23 @@ fn build_binop_assignments(
 
 // note to self: 'sign' bool in NType refers to the int type (either i64 or u64), 'signed' bool on the NumI refers to whether it should be negative
 fn memory_gen_value(
+    ty: &Type,
     prim_val: Value,
     builder: &mut ir::Builder,
     assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>,
-    data_json: &mut serde_json::Value
+    data_json: &mut serde_json::Value,
 ) -> Option<Rc<RefCell<ir::Cell>>> {
     match prim_val {
-        Value::Prim(p) => memory_gen_prim(p, builder, assignment_map),
-        Value::Vec(lst) => memory_gen_vector(lst.as_ref(), builder, data_json),
+        Value::Prim(p) => memory_gen_prim(ty, p, builder, assignment_map),
+        Value::Vec(lst) => memory_gen_vector(ty, lst.as_ref(), builder, data_json),
     }
 }
 
 fn memory_gen_vector(
+    ty: &Type,
     lst: &[Spanned<Prim>],
     builder: &mut ir::Builder,
-    data_json: &mut serde_json::Value
+    data_json: &mut serde_json::Value,
 ) -> Option<Rc<RefCell<ir::Cell>>> {
     let mut data_vals: Vec<i64> = vec![];
     let mut max_width: u8 = 0;
@@ -468,60 +572,51 @@ fn memory_gen_vector(
             }
         }
     });
-    data_json.as_object_mut().unwrap().append(data_file.as_object_mut().unwrap());
+    data_json
+        .as_object_mut()
+        .unwrap()
+        .append(data_file.as_object_mut().unwrap());
     dbg!(data_json.to_string());
     return Some(vec_component);
 }
 
 // TODO: generate assignments after register allocation
 fn memory_gen_prim(
+    ty: &Type,
     prim_val: Prim,
     builder: &mut ir::Builder,
     assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>,
 ) -> Option<Rc<RefCell<ir::Cell>>> {
+    let Type::Num(NType { sign, width }) = ty else {
+        return None;
+    };
+
     match prim_val {
         Prim::NumI(size_opt, signed, int_val) => {
-            match size_opt {
-                Some(size) => {
-                    // TODO: Figure out how to handle signed ints since constant! takes u64s
-                    if signed {
-                        let new_reg = builder.add_primitive("reg", "std_reg", &[size.width as u64]);
-                        Some(new_reg)
-                    } else {
-                        let new_reg = builder.add_primitive("reg", "std_reg", &[size.width as u64]);
-                        let reg_name = new_reg.borrow().name().to_string();
-                        let assignment = memory_gen_assignment(
-                            builder,
-                            Some(int_val),
-                            size.width as u64,
-                            &new_reg,
-                            None,
-                            assignment_map
-                        );
-                        assignment_map.insert(reg_name, assignment);
-                        Some(new_reg)
-                    }
-                }
-                None => {
-                    // TODO: Figure out how to handle signed ints since constant! takes u64s
-                    if signed {
-                        let new_reg = builder.add_primitive("reg", "std_reg", &[8]);
-                        Some(new_reg)
-                    } else {
-                        let new_reg = builder.add_primitive("reg", "std_reg", &[8]);
-                        let reg_name = new_reg.borrow().name().to_string();
-                        let assignment =
-                            memory_gen_assignment(builder, Some(int_val), 8u64, &new_reg, None, assignment_map);
-                        assignment_map.insert(reg_name, assignment);
-                        Some(new_reg)
-                    }
-                }
+            // TODO: Figure out how to handle signed ints since constant! takes u64s
+            if signed {
+                let new_reg = builder.add_primitive("reg", "std_reg", &[*width as u64]);
+                Some(new_reg)
+            } else {
+                let new_reg = builder.add_primitive("reg", "std_reg", &[*width as u64]);
+                let reg_name = new_reg.borrow().name().to_string();
+                let assignment = memory_gen_assignment(
+                    builder,
+                    Some(int_val),
+                    *width as u64,
+                    &new_reg,
+                    None,
+                    assignment_map,
+                );
+                assignment_map.insert(reg_name, assignment);
+                Some(new_reg)
             }
         }
         Prim::Bool(_b_val) => {
             let new_reg = builder.add_primitive("reg", "std_reg", &[1]);
             let reg_name = new_reg.borrow().name().to_string();
-            let assignment = memory_gen_assignment(builder, Some(1), 1u64, &new_reg, None, assignment_map);
+            let assignment =
+                memory_gen_assignment(builder, Some(1), 1u64, &new_reg, None, assignment_map);
             assignment_map.insert(reg_name, assignment);
             Some(new_reg)
         }
@@ -535,7 +630,7 @@ fn memory_gen_assignment(
     size: u64,
     new_reg: &Rc<RefCell<ir::Cell>>,
     src_reg_opt: Option<&Rc<RefCell<ir::Cell>>>,
-    assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>
+    assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>,
 ) -> Rc<RefCell<ir::Group>> {
     // Constant signal
     if int_val.is_none() {
@@ -551,7 +646,14 @@ fn memory_gen_assignment(
             );
             let value_load = src_reg_raw;
             assignment_label.push_str("_reg_assn");
-            build_wire_assignments(builder, new_reg, &signal_on, value_load, assignment_map, &assignment_label)
+            build_wire_assignments(
+                builder,
+                new_reg,
+                &signal_on,
+                value_load,
+                assignment_map,
+                &assignment_label,
+            )
         }
         None => {
             structure!(builder;
@@ -559,7 +661,14 @@ fn memory_gen_assignment(
                 let value_load = constant(int_val.unwrap(), size);
             );
             assignment_label.push_str("_load");
-            build_wire_assignments(builder, new_reg, &signal_on, &value_load, assignment_map, &assignment_label)
+            build_wire_assignments(
+                builder,
+                new_reg,
+                &signal_on,
+                &value_load,
+                assignment_map,
+                &assignment_label,
+            )
         }
     }
 }
@@ -589,8 +698,16 @@ fn build_wire_assignments(
         ir::Guard::True,
     );
 
-    new_group.deref().borrow_mut().assignments.push(write_en_assn);
-    new_group.deref().borrow_mut().assignments.push(value_load_res);
+    new_group
+        .deref()
+        .borrow_mut()
+        .assignments
+        .push(write_en_assn);
+    new_group
+        .deref()
+        .borrow_mut()
+        .assignments
+        .push(value_load_res);
     new_group.deref().borrow_mut().assignments.push(done_signal);
     let returnable = new_group.clone();
     assignment_map.insert(new_reg.borrow().name().to_string(), new_group);
@@ -604,17 +721,21 @@ fn build_wire_assignments_comb(
     right_value_load: &Rc<RefCell<ir::Cell>>,
     prepend_group: &mut Rc<RefCell<ir::Group>>,
 ) {
-    let left_value_load_assn : Assignment<ir::Nothing> = builder.build_assignment(
+    let left_value_load_assn: Assignment<ir::Nothing> = builder.build_assignment(
         new_reg.borrow().get("left"),
         left_value_load.borrow().get("out"),
         ir::Guard::True,
     );
-    let right_value_load_assn : Assignment<ir::Nothing> = builder.build_assignment(
+    let right_value_load_assn: Assignment<ir::Nothing> = builder.build_assignment(
         new_reg.borrow().get("right"),
         right_value_load.borrow().get("out"),
         ir::Guard::True,
     );
 
-    RefCell::borrow_mut(prepend_group).assignments.insert(0, left_value_load_assn);
-    RefCell::borrow_mut(prepend_group).assignments.insert(1, right_value_load_assn);
+    RefCell::borrow_mut(prepend_group)
+        .assignments
+        .insert(0, left_value_load_assn);
+    RefCell::borrow_mut(prepend_group)
+        .assignments
+        .insert(1, right_value_load_assn);
 }

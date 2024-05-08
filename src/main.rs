@@ -9,8 +9,8 @@ mod types;
 use ariadne::{sources, Color, ColorGenerator, Label, Report, ReportKind};
 use calyx_ir as ir;
 use chumsky::prelude::*;
-use std::{io::Write, process::exit};
 use std::fs::File;
+use std::{io::Write, process::exit};
 
 use ast::*;
 use parse::*;
@@ -56,9 +56,9 @@ fn main() -> Result<(), std::io::Error> {
                 }
             };
 
-            let main = decls
+            let main = _res
                 .iter()
-                .find(|x| x.id.0 == "main")
+                .find(|x| x.id == "main")
                 .expect("Missing a main!");
 
             let ctx = match emit::emit(&main.expr) {
@@ -72,7 +72,7 @@ fn main() -> Result<(), std::io::Error> {
                     }
                     write!(json_out, "{}", v.1.to_string());
                     v.0
-                },
+                }
                 Err(e) => {
                     let (file, start, end) = {
                         let (file, start, end) = e.location();
@@ -238,16 +238,29 @@ fn report_tc_error(filename: &String, start: usize, tc_err: types::Error, src: &
                             .with_color(Color::Red),
                     );
             }
-            types::Error::MismatchedOperands { expr, t_lhs, l_lhs, t_rhs, l_rhs  } => {
-                report = report.with_message("Mismatched operand types!")
-                    .with_label(Label::new((filename.clone(), expr.start()+1..expr.start()+2))
-                        .with_color(Color::Yellow))
-                    .with_label(Label::new((filename.clone(), l_lhs.into_range()))
-                        .with_message(format!("this had type {t_lhs}"))
-                        .with_color(Color::Blue))
-                    .with_label(Label::new((filename.clone(), l_rhs.into_range()))
-                        .with_message(format!("while this had type {t_rhs}"))
-                        .with_color(Color::Green));
+            types::Error::MismatchedOperands {
+                expr,
+                t_lhs,
+                l_lhs,
+                t_rhs,
+                l_rhs,
+            } => {
+                report = report
+                    .with_message("Mismatched operand types!")
+                    .with_label(
+                        Label::new((filename.clone(), expr.start() + 1..expr.start() + 2))
+                            .with_color(Color::Yellow),
+                    )
+                    .with_label(
+                        Label::new((filename.clone(), l_lhs.into_range()))
+                            .with_message(format!("this had type {t_lhs}"))
+                            .with_color(Color::Blue),
+                    )
+                    .with_label(
+                        Label::new((filename.clone(), l_rhs.into_range()))
+                            .with_message(format!("while this had type {t_rhs}"))
+                            .with_color(Color::Green),
+                    );
             }
         }
     }

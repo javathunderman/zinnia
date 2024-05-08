@@ -83,15 +83,15 @@ pub enum Error {
     },
     ReservedIdentifier {
         id: String,
-        loc: Span
+        loc: Span,
     },
     MismatchedOperands {
         expr: Span,
         t_lhs: Type,
         l_lhs: Span,
         t_rhs: Type,
-        l_rhs: Span
-    }
+        l_rhs: Span,
+    },
 }
 
 #[derive(Debug)]
@@ -361,9 +361,13 @@ impl Type {
             // Unsolved first to reduce case duplication
             (s, u @ Unsolved(_)) => u.unify(ctx, s),
 
-            (Unsolved(UMonotype { id, st: Subtype::Vec }), v @ Type::VecT(_)) => {
-                Ok(ctx.solve(id, v))
-            }
+            (
+                Unsolved(UMonotype {
+                    id,
+                    st: Subtype::Vec,
+                }),
+                v @ Type::VecT(_),
+            ) => Ok(ctx.solve(id, v)),
 
             (
                 Unsolved(UMonotype {
@@ -452,12 +456,11 @@ fn infer(expr: Spanned<Expr>, ctx: &mut Context) -> Result<SExpr, Error> {
                 t_lhs: lt.clone(),
                 l_lhs: lhs.span(),
                 t_rhs: rt.clone(),
-                l_rhs: rhs.span()
+                l_rhs: rhs.span(),
             };
 
-            let ty = lt.unify(ctx, rt)
-                .catch_unification(|_, _| err)?;
-                // .within(expr.1)?;
+            let ty = lt.unify(ctx, rt).catch_unification(|_, _| err)?;
+            // .within(expr.1)?;
 
             let ret = match op {
                 ast::BinaryOp::Add
@@ -529,19 +532,26 @@ fn infer(expr: Spanned<Expr>, ctx: &mut Context) -> Result<SExpr, Error> {
             let binds_ = binds
                 .iter()
                 .map(|bind| {
-                    let ast::Binding { id: (id, loc), type_hint, expr  } = dbg!(bind);
+                    let ast::Binding {
+                        id: (id, loc),
+                        type_hint,
+                        expr,
+                    } = dbg!(bind);
 
                     let reserved = ["scan", "filter"];
 
                     // If it's a variable *we've* declared, we allow shadowing
                     // but if it's a built-in, then no.
                     if reserved.contains(&id.as_str()) {
-                        return Err(Error::ReservedIdentifier { id: id.clone(), loc: *loc })
+                        return Err(Error::ReservedIdentifier {
+                            id: id.clone(),
+                            loc: *loc,
+                        });
                     };
 
                     let bind_expr = if let Some(ann_ty) = &type_hint {
                         let act_ty = infer(*bind.expr.clone(), ctx)?;
-                            // .with_context(|| ContextInfo::WhileChecking(expr.1, ann_ty.clone()))?;
+                        // .with_context(|| ContextInfo::WhileChecking(expr.1, ann_ty.clone()))?;
 
                         act_ty
                             .ty
@@ -567,7 +577,10 @@ fn infer(expr: Spanned<Expr>, ctx: &mut Context) -> Result<SExpr, Error> {
                             if o.get().1.is_some() {
                                 o.insert((bind_expr.ty.clone(), Some(*loc)));
                             } else {
-                                return Err(Error::ReservedIdentifier { id: id.clone(), loc: *loc })
+                                return Err(Error::ReservedIdentifier {
+                                    id: id.clone(),
+                                    loc: *loc,
+                                });
                             };
                         }
                         Entry::Vacant(v) => {
@@ -675,19 +688,24 @@ impl Context {
 
         ctx.scope.insert(
             "scan".to_owned(),
-            (Type::ForAll(
-                u_vec,
-                Box::new(Type::Arrow(vec![u_vec.into()], Box::new(u_vec.into()))),
+            (
+                Type::ForAll(
+                    u_vec,
+                    Box::new(Type::Arrow(vec![u_vec.into()], Box::new(u_vec.into()))),
+                ),
+                None,
             ),
-            None)
         );
 
         ctx.scope.insert(
             "filter".to_owned(),
-            (Type::ForAll(
-                u_vec,
-                Box::new(Type::Arrow(vec![u_vec.into()], Box::new(u_vec.into()))),
-            ), None)
+            (
+                Type::ForAll(
+                    u_vec,
+                    Box::new(Type::Arrow(vec![u_vec.into()], Box::new(u_vec.into()))),
+                ),
+                None,
+            ),
         );
 
         ctx
@@ -833,7 +851,8 @@ pub fn check_all(decls: &Vec<Decl>) -> Result<Vec<SBinding>, Error> {
     let mut ctx = Context::new();
 
     for decl in decls {
-        ctx.scope.insert(decl.id.0.clone(), (decl.ty.0.clone(), Some(decl.id.span())));
+        ctx.scope
+            .insert(decl.id.0.clone(), (decl.ty.0.clone(), Some(decl.id.span())));
     }
 
     decls
