@@ -68,10 +68,6 @@ pub enum Error {
         loc: Span,
     },
     IdentifierNotFound(Spanned<String>),
-    InvalidVectorSize {
-        loc: Span,
-        count: usize,
-    },
     WithContext {
         ctx: ContextInfo,
         err: Box<Error>,
@@ -611,13 +607,6 @@ impl Typeable for Spanned<&ast::Value> {
         match self.0 {
             ast::Value::Prim(p) => p.at(self.span()).infer(ctx),
             ast::Value::Vec(vs) => {
-                if vs.len() != 0 && !vs.len().is_power_of_two() {
-                    return Err(Error::InvalidVectorSize {
-                        loc: self.span(),
-                        count: vs.len(),
-                    });
-                }
-
                 let mut ty = Type::Unsolved(ctx.new_unsolved(Subtype::Num(None)));
 
                 for v in vs.iter() {
