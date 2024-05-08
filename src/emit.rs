@@ -5,14 +5,12 @@ use chumsky::span::SimpleSpan;
 use ir::Assignment;
 use serde_json::json;
 use std::borrow::BorrowMut;
-use std::cell::Ref;
-use std::collections::VecDeque;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use crate::{ast::*, Spanned};
 
-pub fn emit(ast: &(Expr, SimpleSpan)) -> Result<ir::Context, calyx_utils::Error> {
+pub fn emit(ast: &(Expr, SimpleSpan)) -> Result<(ir::Context, serde_json::Value), calyx_utils::Error> {
     let mut ws = frontend::Workspace::construct_with_all_deps::<false>(
         vec![
             "/home/arjun/coursecode/838l-build-chain/calyx/primitives/memories/comb.futil".into(),
@@ -35,14 +33,36 @@ pub fn emit(ast: &(Expr, SimpleSpan)) -> Result<ir::Context, calyx_utils::Error>
     let mut calyx_builder = ir::Builder::new(main_component, &ctx.lib);
     let mut binding_map: HashMap<String, Rc<RefCell<ir::Cell>>> = HashMap::new();
     let mut assignment_map: HashMap<String, Rc<RefCell<ir::Group>>> = HashMap::new();
-
-    memory_gen(
+    let mut data_json = json!({ });
+    let res_register = memory_gen(
         &ast,
         &mut calyx_builder,
         &mut binding_map,
         &mut assignment_map,
+        &mut data_json
+    ).expect("nope");
+    let output_width = res_register.borrow().get_parameter("WIDTH").unwrap();
+    let mut output_vec = calyx_builder.add_primitive("output_mem", "comb_mem_d1", &[output_width, 1, output_width]);
+    RefCell::borrow_mut(output_vec.borrow_mut()).add_attribute(ir::Attribute::Bool(ir::BoolAttr::External), 1);
+    let output_write_group = build_wire_to_memory(&mut calyx_builder, &res_register, &output_vec, output_width, 0, "write_output");
+    let mut output_reg_json = json!({
+            output_vec.borrow().name().to_string() : {
+                "data": [0],
+                "format": {
+                    "numeric_type": "bitnum",
+                    "is_signed": false,
+                    "width": output_width
+                }
+            }
+        }
     );
-    return Ok(ctx);
+    data_json.as_object_mut().unwrap().append(output_reg_json.as_object_mut().unwrap());
+    { let mut seq = RefCell::borrow_mut(&calyx_builder.component.control);
+    match &mut *seq {
+        ir::Control::Seq(seq_lst) => seq_lst.stmts.push(ir::Control::enable(output_write_group)),
+        _ => panic!("no support for non-sequential programs yet (other than parscan)")
+    } }
+    return Ok((ctx, data_json));
 }
 
 fn memory_gen(
@@ -50,10 +70,11 @@ fn memory_gen(
     builder: &mut ir::Builder,
     binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>,
     assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>,
+    data_json: &mut serde_json::Value,
 ) -> Option<Rc<RefCell<ir::Cell>>> {
-    let (parsed_expr, debug_span) = ast;
+    let (parsed_expr, _debug_span) = ast;
     match parsed_expr {
-        Expr::Value(val) => memory_gen_value(val.clone(), builder, assignment_map),
+        Expr::Value(val) => memory_gen_value(val.clone(), builder, assignment_map, data_json),
         Expr::Id(var_id) => Some(Rc::clone(binding_map.get(var_id).unwrap())),
         Expr::Let(binding_lst, rem_expr) => {
             for binding_obj in binding_lst.iter() {
@@ -64,6 +85,7 @@ fn memory_gen(
                         builder,
                         binding_map,
                         assignment_map,
+                        data_json
                     );
                     binding_map.insert(binding_obj.id.clone(), result_cell.unwrap());
                 } else {
@@ -71,9 +93,9 @@ fn memory_gen(
                 }
             }
             /* Compile terms outside of the let scope */
-            memory_gen(rem_expr, builder, binding_map, assignment_map)
+            memory_gen(rem_expr, builder, binding_map, assignment_map, data_json)
         }
-        Expr::Binary(rem_expr_1, operator, rem_expr_2) => memory_gen_binop(rem_expr_1, binding_map, rem_expr_2, operator, builder, assignment_map).0,
+        Expr::Binary(rem_expr_1, operator, rem_expr_2) => Some(memory_gen_binop(rem_expr_1, binding_map, rem_expr_2, operator, builder, assignment_map, data_json).2),
         Expr::Call(func_expr, func_args) => match &func_expr.as_ref().0 {
             Expr::Id(func_name) => match func_name.as_str() {
                 "filter" => match &func_args.0.get(0).unwrap().0 {
@@ -102,14 +124,14 @@ fn memory_gen(
                         BinaryOp::Div => panic!("Invalid binop in if statement"),
                         _ => dbg!("OK binop in if statement (can be made into comb group)")
                     };
-                    let condition_expr_res = memory_gen_binop(rem_expr1, binding_map, rem_expr2, op, builder, assignment_map);
+                    let condition_expr_res = memory_gen_binop(rem_expr1, binding_map, rem_expr2, op, builder, assignment_map, data_json);
                     let mut control_group = condition_expr_res.1.unwrap();
                     let right_assn = RefCell::borrow_mut(control_group.borrow_mut()).assignments.get(0).unwrap().to_owned();
                     let left_assn = RefCell::borrow_mut(control_group.borrow_mut()).assignments.get(1).unwrap().to_owned();
                     RefCell::borrow_mut(control_group.borrow_mut()).assignments.remove(0);
                     RefCell::borrow_mut(control_group.borrow_mut()).assignments.remove(0);
-                    let true_cell = memory_gen(&true_body, builder, binding_map, assignment_map).unwrap();
-                    let false_cell = memory_gen(&false_body, builder, binding_map, assignment_map).unwrap();
+                    let true_cell = memory_gen(&true_body, builder, binding_map, assignment_map, data_json).unwrap();
+                    let false_cell = memory_gen(&false_body, builder, binding_map, assignment_map, data_json).unwrap();
 
                     let cond_group = builder.add_comb_group("if_expr_c");
                     cond_group.deref().borrow_mut().assignments.insert(0, left_assn);
@@ -134,7 +156,7 @@ fn memory_gen(
     }
 }
 
-fn memory_gen_binop(rem_expr_1: &Box<(Expr, SimpleSpan)>, binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>, rem_expr_2: &Box<(Expr, SimpleSpan)>, operator: &BinaryOp, builder: &mut ir::Builder, assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>) -> (Option<Rc<RefCell<ir::Cell>>>, Option<Rc<RefCell<ir::Group>>>) {
+fn memory_gen_binop(rem_expr_1: &Box<(Expr, SimpleSpan)>, binding_map: &mut HashMap<String, Rc<RefCell<ir::Cell>>>, rem_expr_2: &Box<(Expr, SimpleSpan)>, operator: &BinaryOp, builder: &mut ir::Builder, assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>, data_json: &mut serde_json::Value) -> (Option<Rc<RefCell<ir::Cell>>>, Option<Rc<RefCell<ir::Group>>>, Rc<RefCell<ir::Cell>>) {
     let operand1 : &Rc<RefCell<ir::Cell>> = match &rem_expr_1.as_ref().0 {
         Expr::Id(var_name) => binding_map.get(var_name).unwrap(),
         _ => panic!("Cannot compile inlined expressions right now, use a let binding and create the var first")
@@ -196,8 +218,8 @@ fn memory_gen_binop(rem_expr_1: &Box<(Expr, SimpleSpan)>, binding_map: &mut Hash
         res_size,
         drive_go
     );
-    memory_gen(&rem_expr_2, builder, binding_map, assignment_map);
-    (Some(binop_prim), control_group)
+    memory_gen(&rem_expr_2, builder, binding_map, assignment_map, data_json);
+    (Some(binop_prim), control_group.0, control_group.1)
 }
 
 fn build_wire_from_memory(
@@ -211,7 +233,7 @@ fn build_wire_from_memory(
     let new_group = builder.add_group(group_label);
     structure!(builder;
         let signal_on = constant(1, 1);
-        let read_from_addr = constant(bit_width, vec_index);
+        let read_from_addr = constant(vec_index, bit_width);
     );
     let write_en_assn = builder.build_assignment(
         new_reg.borrow().get("write_en"),
@@ -249,13 +271,13 @@ fn build_wire_to_memory(
     vec_index: u64,
     group_label: &str,
 ) -> Rc<RefCell<ir::Group>> {
-    let mut new_group = builder.add_group(group_label);
+    let new_group = builder.add_group(group_label);
     structure!(builder;
         let signal_on = constant(1, 1);
-        let write_to_addr = constant(bit_width, vec_index);
+        let write_to_addr = constant(vec_index, bit_width);
     );
     let write_en_assn = builder.build_assignment(
-        src_reg.borrow().get("write_en"),
+        vec_dest.borrow().get("write_en"),
         signal_on.borrow().get("out"),
         ir::Guard::True,
     );
@@ -321,7 +343,7 @@ fn build_binop_assignments(
     assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>,
     res_size: u64,
     drive_go: bool
-) -> Option<Rc<RefCell<ir::Group>>> {
+) -> (Option<Rc<RefCell<ir::Group>>>, Rc<RefCell<ir::Cell>>) {
     let operand1_reg_name: String = operand1.borrow().name().to_string().clone();
     let operand2_reg_name: String = operand2.borrow().name().to_string().clone();
     let local_assn_map = assignment_map.to_owned();
@@ -354,7 +376,7 @@ fn build_binop_assignments(
         ir::Control::enable(binop_res_assn.to_owned()),
     ]);
     builder.component.control = Rc::new(seq.into());
-    Some(binop_res_assn)
+    (Some(binop_res_assn), binop_res)
 }
 
 // note to self: 'sign' bool in NType refers to the int type (either i64 or u64), 'signed' bool on the NumI refers to whether it should be negative
@@ -362,16 +384,18 @@ fn memory_gen_value(
     prim_val: Value,
     builder: &mut ir::Builder,
     assignment_map: &mut HashMap<String, Rc<RefCell<ir::Group>>>,
+    data_json: &mut serde_json::Value
 ) -> Option<Rc<RefCell<ir::Cell>>> {
     match prim_val {
         Value::Prim(p) => memory_gen_prim(p, builder, assignment_map),
-        Value::Vec(lst) => memory_gen_vector(lst.as_ref(), builder),
+        Value::Vec(lst) => memory_gen_vector(lst.as_ref(), builder, data_json),
     }
 }
 
 fn memory_gen_vector(
     lst: &[Spanned<Prim>],
     builder: &mut ir::Builder,
+    data_json: &mut serde_json::Value
 ) -> Option<Rc<RefCell<ir::Cell>>> {
     let mut data_vals: Vec<i64> = vec![];
     let mut max_width: u8 = 0;
@@ -414,8 +438,18 @@ fn memory_gen_vector(
         max_width = 8;
     }
 
-    let data_file = json!({
-        "mem":
+    let vec_component = builder.add_primitive(
+        "mem",
+        "comb_mem_d1",
+        &[max_width as u64, lst.len() as u64, max_width as u64],
+    );
+    vec_component
+        .deref()
+        .borrow_mut()
+        .add_attribute(ir::BoolAttr::External, 1);
+
+    let mut data_file = json!({
+        vec_component.deref().borrow().name().to_string():
         {
             "data": data_vals,
             "format" : {
@@ -425,16 +459,8 @@ fn memory_gen_vector(
             }
         }
     });
-    dbg!(data_file.to_string());
-    let vec_component = builder.add_primitive(
-        "mem",
-        "comb_mem_d1",
-        &[max_width as u64, lst.len() as u64, max_width.ilog2() as u64],
-    );
-    vec_component
-        .deref()
-        .borrow_mut()
-        .add_attribute(ir::BoolAttr::External, 1);
+    data_json.as_object_mut().unwrap().append(data_file.as_object_mut().unwrap());
+    dbg!(data_json.to_string());
     return Some(vec_component);
 }
 
