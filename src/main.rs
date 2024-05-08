@@ -62,16 +62,19 @@ fn main() -> Result<(), std::io::Error> {
                 .expect("Missing a main!");
 
             let ctx = match emit::emit(&main.expr) {
-                Ok(v) => {
+                Ok((ctx, val)) => {
                     let mut calyx_out = File::create("out/output.futil")?;
                     let mut json_out = File::create("out/data.json")?;
-                    write!(calyx_out, "import \"primitives/core.futil\";\nimport \"primitives/memories/comb.futil\";");
 
-                    for c in &v.0.components {
-                        ir::Printer::write_component(&c, &mut calyx_out);
+                    write!(calyx_out, "import \"primitives/core.futil\";\nimport \"primitives/memories/comb.futil\";")?;
+
+                    for c in &ctx.components {
+                        ir::Printer::write_component(&c, &mut calyx_out)?;
                     }
-                    write!(json_out, "{}", v.1.to_string());
-                    v.0
+
+                    write!(json_out, "{}", val.to_string())?;
+
+                    ctx
                 }
                 Err(e) => {
                     let (file, start, end) = {
