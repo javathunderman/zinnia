@@ -79,7 +79,7 @@ pub enum Type {
     Unit,
     Unsolved(UMonotype),
     // forall a. ...
-    ForAll(UMonotype, Box<Type>)
+    ForAll(UMonotype, Box<Type>),
 }
 
 impl fmt::Display for Type {
@@ -110,11 +110,11 @@ impl fmt::Display for Type {
                     Subtype::Num(None) => write!(f, "[Num]"),
                     Subtype::Num(Some(UNum { sign, min_size })) => {
                         write!(f, "[Num(sign: {}, min_size: {})]", sign, min_size)
-                    },
-                    Subtype::Vec => write!(f, "[Vec]")
+                    }
+                    Subtype::Vec => write!(f, "[Vec]"),
                 }
             }
-            Type::ForAll(univ, t) => write!(f, "forall {univ:?}. {t}")
+            Type::ForAll(univ, t) => write!(f, "forall {univ:?}. {t}"),
         }
     }
 }
@@ -141,11 +141,10 @@ impl From<NType> for Type {
 pub enum Subtype {
     Any,
     Num(Option<UNum>),
-    Vec
-    // Unit,
-    // Float,
-    // User-defined type
-    // Other { id: i64 }
+    Vec, // Unit,
+         // Float,
+         // User-defined type
+         // Other { id: i64 }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
