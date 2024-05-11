@@ -184,15 +184,6 @@ fn report_tc_error(filename: &String, start: usize, tc_err: types::Error, src: &
                             .with_color(Color::Red),
                     );
             }
-            types::Error::InvalidVectorSize { loc, count } => {
-                report = report
-                    .with_message("Invalid vector size!")
-                    .with_label(
-                        Label::new((filename.clone(), loc.into_range()))
-                            .with_message(format!("This vector had size {count}")),
-                    )
-                    .with_note("Vector sizes must be a power of 2");
-            }
             types::Error::WithContext { ctx, err } => {
                 match ctx {
                     types::ContextInfo::WhileApplying(_, _, _) => todo!(),
