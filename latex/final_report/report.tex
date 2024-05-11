@@ -1,15 +1,19 @@
-\documentclass{article}
+\documentclass[12pt]{article}
 \usepackage{graphicx} % Required for inserting images
-
+\usepackage[margin=1in]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{minted}
+\usepackage{xparse}
+\usepackage{graphicx}
+\usepackage[normalem]{ulem}
+\usepackage{soul}
+\usepackage{float}
 \usepackage{hyperref}
-\hypersetup{
-    colorlinks=true,
-    linkcolor=blue,
-    filecolor=magenta,
-    urlcolor=cyan,
-    pdftitle={Overleaf Example},
-    pdfpagemode=FullScreen,
+\NewDocumentCommand{\codeword}{v}{%
+\texttt{\textcolor{blue}{#1}}%
 }
+\usepackage{hyperref}
 
 \title{CMSC838L - Final report}
 \author{Arjun Vedantham \\ Yusuf Bham}
