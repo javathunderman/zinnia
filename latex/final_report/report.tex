@@ -41,6 +41,8 @@ a stream that is passed to a GUI block that graphs the signal, using a Fast Four
 This simple flowgraph is stored in an XML format, and is used by GNURadio's backend to generate a Python script that actually runs the defined
 processing pipeline. In addition, there are also C/C++ modules loaded into the runtime system for low level tasks - for instance, a USB driver for the SDR.
 
+\includegraphics[width=\linewidth]{images/gnuradio.png}
+
 \subsection{Problems Identified with State of the Art}
 There are number of problems with this current approach. First, GNURadio's practice of emitting Python scripts means that parallelism is
 limited on two fronts - first, because of language design choices (Python's infamous "global interpreter lock", which essentially forbids
