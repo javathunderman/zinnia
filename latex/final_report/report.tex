@@ -86,4 +86,66 @@ We also considered emitting circuits using CIRCT, the LLVM framework that allows
 MLIR that is subsequently lowered to a Verilog hardware description, however we quickly found that
 CIRCT lacked the project maturity needed to develop even a basic language around it. This included
 no binaries to link against, thus requiring us to compile a large subset of the LLVM project, which was not practical.
+Calyx also had better documentation for its IR, and a small standard library of memory cells that could be easily integrated
+into circuits synthesized when the compiler lowers from the IR to a Verilog hardware description.
+\subsection{Code Generation}
+The compiler that we wrote for Zinnia traverses the AST recursively. Since there is no concept of dynamic
+memory allocation for circuits, we focused on generating the required memories for the circuit first.
+
+Additionally, while Calyx has a "par" primitive for parallelizing parts of the circuit, Zinnia currently only generates
+circuits using the "seq" ("sequential") control flow keyword for easier debugging and testing. Even though parallelism
+at the user level is limited, we still hoped to expose some of the potential parallel speedups through the use
+of a function primitive that could be used to get implicit parallelism.
+
+\subsection{Prefix Sums Scan}
+To expose some parallelism without explicitly supporting copmiling using the "par" control flow block,
+we implemented a version of parallel scan using the prefix sums algorithm.
+
+\section{Evaluation}
+We decided to evaluate our language in three different ways: correctness testing, scalability testing, and hardware testing.
+\subsection{Correctness Testing}
+To verify the correctness of the language, we used the Cocotb RTL testing framework. This allows
+us to run a simulated version of the circuit's clock and write unit tests around elements of the circuits
+that we generate.
+\subsection{Scalability Testing}
+Second, we focused on testing scalability. For this, we focused on evaluating the "scan" primitive, since
+it is the main way end-users would be able to obtain parallelism through the language (at least, as it is currently implemented).
+We found that in simulation, our parallel scan implementation always took 71 cycles to generate outputs, given a set of 8 integers
+to iterate over. While parallel scan theoretically provides work bounds of $O(n)$ and span bounds of $O(lg(n))$, in practice the
+work and span bounds of our implementation are worse. This is because we were not sure if it was possible to instantiate
+an arbitrarily high number of registers, so we focused on using the combinational memory primitives to hold intermediate values
+(particularly between the "sweep-up" and "sweep-down" phases of parallel scan). Combinational memory primitives in the Calyx IR
+are exclusive read/write memory cells, and take at least one cycle to set the data address and read the stored value out of the memory
+into a register. This restriction essentially limited the parallelism that we could achieve to only a few steps of the algorithm - specifically,
+summing values between nodes at each level of the prefix sums tree, since the additions were purely combinational and depended only
+on values in registers that were ready to go at the last cycle.
+\subsection{Physical Testing}
+We hoped to eventually deploy circuits that were synthesized using Zinnia to a Lattice Icestick FPGA.
+This FPGA can be used with consumer devices over a USB connection, and has a large library of open source tooling.
+This includes the Yosys synthesis toolkit (which handles transforming high level Verilog hardware descriptions into
+lower level RTL circuits), the nextpnr place and route tool (which handles connections between logic units
+on the FPGA), and iceprog, an open source programming tool that could deploy circuits with complete routing
+to the flash memory on-board the Icestick.
+
+Circuits synthesized by Calyx include three signals by default - a "go" line, which when activated,
+activates the circuit, a "clk" (clock) line, which handles cycle-level signalling for the sequential logic
+elements of the circuit, and a "reset" line, which can be used to reset the circuit while active.
+
+In order to actually use the synthesized circuits, the "go" line must be pulled to logical high, and
+while the reset lines needed to be set to logical low, and the clock line must be tied to the 12 MHz
+oscillator built into the Icestick. Values for the "scan" primitive could then be loaded in from the Icestick's
+block RAM module.
+
+To support dynamically loading values into block RAM, we wrote a small serial communication driver for the Icestick.
+Specifically, this was a form of one way (half-duplex) SPI, with an Arduino serving as the primary device on the SPI
+bus, and the Icestick serving as the secondary device. We chose SPI because it is relatively easy to implement
+on the receiving side (in fact, a shift register is enough to receive data transmitted over the data line).
+While testing the SPI driver, we wanted to use an external clock source to control the speed of data transmission,
+and ensure that the Icestick was sampling the data line in phase with the transmitting device's clock (in this case
+an Arduino). Unfortunately, setting the clock line for the circuit loaded onto the FPGA also sets the clock line
+for the USB programmer chip, which requires a 12MHz signal in order to function correctly. This misconfiguration
+prevented us from loading new circuits onto the FPGA, and required us to use simulation as our primary evaluation
+method instead.
+
+\section{Conclusion}
 \end{document}
