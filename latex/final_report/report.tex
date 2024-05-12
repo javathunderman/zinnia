@@ -150,4 +150,17 @@ prevented us from loading new circuits onto the FPGA, and required us to use sim
 method instead.
 
 \section{Conclusion}
+In the end, we were able to implement a version of the scan primitive in the Calyx IR, implement a bidirectional
+typing system, add some basic language features into our language, and use external circuit verification and simulation
+tools to show that our circuits performed as the high level program specified.
+
+However, there is still room for improvement - we do not have support for looping structures, even though the Calyx IR supports
+it. We were also not able to show our circuits running on real hardware, which was the ultimate goal of the project.
+
+One obstacle that we did not foresee was the difficulty of working with the Calyx IR from Rust. While LLVM's CIRCT project
+has a robust Rust API, it seems that the authors of the Calyx IR primarily want language authors to use their IR from
+a Python builder module or the CIRCT toolchain, even though the Filament HDL (which was authored by the same research
+group and uses Calyx as its IR) is also written in Rust. For some issues, like linking against the combinational memory
+primitives or inlining other components, the Rust library documentation was so poor that we ended up looking through
+Filament's implementation and using that as a guide for building our compiler.
 \end{document}
