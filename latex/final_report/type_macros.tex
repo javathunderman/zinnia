@@ -1,0 +1,183 @@
+% Largely sourced from https://arxiv.org/abs/1306.6032
+
+\def\CompactJudgments{0}
+\newcommand{\entails}{\mathrel{\ifnum\CompactJudgments=1%
+    \vdash%
+  \else%
+     \vdash\,%
+  \fi}}
+\newcommand{\ctxoutsym}{\ifnum\CompactJudgments=1%
+    \dashv%
+  \else%
+     \,\dashv%
+  \fi}
+\newcommand{\ctxout}[1]{\mathrel{\ctxoutsym}{#1}}
+
+\definecolor{dHilite}{rgb}{0.9, 0.9, 0.6}
+\definecolor{dRed}{rgb}{0.65, 0.0, 0.0}
+\definecolor{dGreen}{rgb}{0.0, 0.65, 0.0}
+\definecolor{dDkGreen}{rgb}{0.0, 0.35, 0.0}
+\definecolor{dBlue}{rgb}{0.0, 0.0, 0.65}
+\definecolor{dPurple}{rgb}{0.65, 0.0, 0.65}
+\definecolor{dDigPurple}{rgb}{0.5, 0.0, 0.5}
+\definecolor{dAlsoPurple}{RGB}{137, 101, 255}
+\definecolor{dFaint}{rgb}{0.7, 0.7, 0.7}
+\definecolor{dGray}{rgb}{0.5, 0.5, 0.5}
+\definecolor{dDark}{rgb}{0.2, 0.2, 0.2}
+\definecolor{dAlmostBlack}{rgb}{0.1, 0.1, 0.1}
+
+\newcommand{\rulename}[1]{\text{\normalfont\textsf{#1}}}
+
+
+\newcommand{\emptysig}{\cdot}
+\newcommand{\emptyctx}{\cdot}
+
+\newcommand{\natzero}{\mathsf{zero}}
+\newcommand{\xnatsucc}{\mathsf{succ}}
+\newcommand{\natsucc}[1]{\xnatsucc\texttt{(}{#1}\texttt{)}}
+
+
+\newcommand{\instantiate}[1]{{#1}\texttt{[-]}}
+\newcommand{\quantify}[1]{\Lambda{#1}.\,}
+
+
+\newcommand{\exvar}[1]{\widehat{#1}}
+\newcommand{\exalpha}{\exvar{\alpha}}
+\newcommand{\exbeta}{\exvar{\beta}}
+
+\newcommand{\alln}[1]{\forall{#1}{:}\kindnat.\,}
+
+\newcommand{\Match}[2]{{#1} \Rightarrow {#2}}
+\newcommand{\matchor}{\ensuremath{\normalfont\,\texttt{|}\hspace{-5.35pt}\texttt{|}\,}}
+\newcommand{\ind}[3]{\mathsf{ind}\texttt{(}\Match{\natzero}{#1}%
+                     \texttt{,\;}%
+                     \Match{\natsucc{#2}}{#3}
+                     \texttt{)}}
+
+\newcommand{\exunk}[2]{{#1} : {#2}}
+\newcommand{\exsol}[3]{{#1} : {#2} \texttt{=} {#3}}
+\newcommand{\exsolnokind}[2]{{#1} \texttt{=} {#2}}
+\newcommand{\exsolwild}[2]{({#1} : {#2}\dots)}
+\newcommand{\rexvar}[2]{\exsolnokind{#1}{#2}}
+
+\newcommand{\tyname}[1]{\textsf{\normalfont #1}}
+%
+\newcommand{\unitexp}{\text{\normalfont \tt()}}
+\newcommand{\unitty}{\tyname{\normalfont \tt()}}
+
+\newcommand{\numty}{\tyname{\ensuremath{\vartheta}}}
+\newcommand{\usn}{\texttt{u}}
+\newcommand{\sn}{\texttt{i}}
+\newcommand{\boolty}{\tyname{Bool}}
+\newcommand{\isnum}[1]{\mathsf{num}(#1)}
+\newcommand{\vecty}[2]{\operatorname{\mathsf{Vec}}(#1, #2)}
+\newcommand{\evecty}{\operatorname{\mathsf{Vec}}}
+\newcommand{\faty}[2]{\forall #1.\,#2}
+
+\newcommand{\trientails}{\mathrel{{\rhd}\,}}
+\newcommand{\trictxoutsym}{{\lhd}}
+\newcommand{\trictxout}[1]{\mathrel{\trictxoutsym}{#1}}
+
+\newcommand{\subtypingycolor}[1]{\textcolor{dDigPurple}{#1}}
+%
+\newcommand{\subtype}{\mathrel{\normalfont\texttt{\subtypingycolor{<:}}}}  %
+\newcommand{\declsubtype}{\mathrel{\leq}}
+
+\newcommand{\declsubjudg}[3]{\ensuremath{{#1} \entails {#2} \declsubtype {#3}}}
+\newcommand{\typejudg}[3]{\ensuremath{{#1} \entails {#2} : {#3}}}
+\newcommand{\subjudg}[4]{\ensuremath{{#1} \entails {#2} \subtype {#3} \ctxout{#4}}}
+
+\newcommand{\subrulename}[1]{\ensuremath{{\subtype}\rulename{#1}}\xspace}
+\newcommand{\Infer}[3]{\inferrule*[right={\text{\strut#1}}]{{}#2\mathstrut}{{}#3\mathstrut}}
+
+\newcommand{\textgraybox}[1]{\boxed{#1}}
+\newcommand{\judgboxfontsize}[1]{%
+    % \ifnum\OPTIONConf=1%
+        \mathsz{14pt}{#1}%
+    %\else%
+        % \mathsz{14pt}{#1}%
+    }
+    %\fi
+\newcommand{\judgbox}[2]{%
+      {\raggedright \textgraybox{\ensuremath{\judgboxfontsize{#1}}}\!%
+        \fontsz{12pt}{\begin{tabular}[c]{l} #2 \end{tabular}} %
+}}
+
+\newdimen\zzfontsz
+\newcommand{\fontsz}[2]{\zzfontsz=#1%
+{\fontsize{\zzfontsz}{1.2\zzfontsz}\selectfont{#2}}}
+
+\newcommand{\mathsz}[2]{\text{\fontsz{#1}{$#2$}}}
+
+\DeclareMathOperator*{\bigentails}{\,\,\entails}
+\newcommand{\judgetp}[2]{{#1} \entails {#2}}
+\newcommand{\judgetps}[3]{{#1} \bigentails_{i = 1}^{#2} {#3}}
+
+\newdimen\zzinstsymLTwidth
+\newdimen\zzinstsymEQwidth
+\newdimen\zzinstsymDiff
+\newcommand{\instsymLeq}{%
+    \settowidth{\zzinstsymLTwidth}{\text{\normalfont\tt<}}%
+    \settowidth{\zzinstsymEQwidth}{\text{\normalfont=}}%
+    \setlength{\zzinstsymDiff}{\zzinstsymEQwidth}%
+    \addtolength{\zzinstsymDiff}{-\zzinstsymLTwidth}%
+    \text{\raisebox{-0.22ex}{\normalfont=}%
+%
+    \hspace{-\zzinstsymEQwidth}%
+    \hspace{0.5\zzinstsymDiff}%
+    \raisebox{0.77ex}{\normalfont\tt<}}}
+\newcommand{\instsymColon}{%
+     \raisebox{-0.09ex}{\text{\normalfont{:}}}}
+%
+%
+%
+\newcommand{\instsyml}{\subtypingycolor{\instsymColon\hspace{0.05ex}\instsymLeq}}
+\newcommand{\instsymr}{\subtypingycolor{\instsymLeq\hspace{0.05ex}\instsymColon}}
+\newcommand{\instsymlop}{\mathrel{\instsyml}}
+\newcommand{\instsymrop}{\mathrel{\instsymr}}
+
+\newcommand{\instjudg}[4]{\ensuremath{{#1} \entails {#2} \instsymlop {#3} \ctxout{#4}}}
+\newcommand{\instjudgr}[4]{\ensuremath{{#1} \entails {#3} \instsymrop {#2} \ctxout{#4}}}
+
+\newcommand{\declsubjudgPf}[4] {\Pf{#1}{\entails}{{#2} \declsubtype {#3}}{#4}}
+\newcommand{\subjudgPf}[5] {\Pf{#1}{\entails}{{#2} \subtype {#3} \ctxout{#4}}{#5}}
+\newcommand{\substextendPf}[3] {\Pfmrg{{#1} \extendssym\,}{#2}{#3}}
+\newcommand{\instjudgPf}[5]{\Pf{#1}{\entails}{{#2} {\;\instsyml\;} {#3} \ctxout{#4}}{#5}}
+\newcommand{\instjudgrPf}[5]{\Pf{#1}{\entails}{{#3} {\;\instsymr\;} {#2} \ctxout{#4}}{#5}}
+
+\newcommand{\chkcolor}{dBlue}
+\newcommand{\syncolor}{dRed}
+\newcommand{\appcolor}{dDkGreen}
+\newcommand{\chk}{\mathrel{\mathcolor{\chkcolor}{\Leftarrow}}}
+\newcommand{\uncoloredsyn}{{\Rightarrow}}
+\newcommand{\syn}{\mathrel{\mathcolor{\syncolor}{\uncoloredsyn}}}
+
+\newcommand{\appsep}{\;{\mathcolor{\appcolor}{\bullet}}\;}
+%
+\newcommand{\app}{\mathrel{\mathcolor{\appcolor}{{\uncoloredsyn}\hspace{-1.2ex}{\uncoloredsyn}}}}
+
+% unification
+\newcommand{\unicolor}{dAlsoPurple}
+\newcommand{\unisep}{\;{\mathcolor{\unicolor}{\cap}}\;}
+\newcommand{\uni}{\mathrel{\mathcolor{\unicolor}{{\uncoloredsyn}\hspace{-1.2ex}{\uncoloredsyn}}}}
+
+
+\newcommand{\unijudg}[5]{\ensuremath{{#1} \entails {#2} \unisep {#3} \uni {#4} \ctxout{#5}}}
+
+\newcommand{\chkjudg}[4]{\ensuremath{{#1} \entails {#2} \chk {#3} \ctxout{#4}}}
+\newcommand{\appjudg}[5]{\ensuremath{{#1} \entails {#3} \appsep {#2} \app {#4} \ctxout{#5}}}
+\newcommand{\synjudg}[4]{\ensuremath{{#1} \entails {#2} \syn {#3} \ctxout{#4}}}
+
+\DeclareMathOperator*{\chks}{\vphantom{\lim}\!\mathrel{\!\mathcolor{\chkcolor}{\Leftarrow}}}
+\newcommand{\chkjudgs}[5]{\ensuremath{{#1} \entails {#2} \chks_{i = 1}^{#3} {#4} \ctxout{#5}}}
+
+\DeclareMathOperator*{\syns}{\vphantom{\lim}\!\mathrel{\!\mathcolor{\syncolor}{\uncoloredsyn}}}
+\newcommand{\synjudgs}[5]{\ensuremath{{#1} \entails {#2} \syns_{i = 1}^{#3} {#4} \ctxout{#5}}}
+
+\DeclareMathOperator*{\unis}{\mathrel{\mathcolor{\unicolor}{{\uncoloredsyn}\hspace{-1.2ex}{\uncoloredsyn}}}}
+\newcommand{\unijudgs}[6]{\ensuremath{{#1} \entails #2 \unisep #3 \unis_{i = 1}^{#4} {#5} \ctxout{#6}}}
+
+\newcommand{\declchkjudg}[3]{\ensuremath{{#1} \entails {#2} \chk {#3}}}
+\newcommand{\declappjudg}[4]{\ensuremath{#1} \entails {#3} \appsep {#2}  \app {#4}}
+
+\newcommand{\family}[2]{\{ {#1}_i \}_1^{#2}}
