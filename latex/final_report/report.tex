@@ -19,6 +19,7 @@
 \usepackage{amsfonts}
 \usepackage{mathtools}
 \usepackage{subcaption}
+\usepackage{syntax}
 
 \NewDocumentCommand{\codeword}{v}{%
 \texttt{\textcolor{blue}{#1}}%
@@ -176,6 +177,57 @@ a Python builder module or the CIRCT toolchain, even though the Filament HDL (wh
 group and uses Calyx as its IR) is also written in Rust. For some issues, like linking against the combinational memory
 primitives or inlining other components, the Rust library documentation was so poor that we ended up looking through
 Filament's implementation and using that as a guide for building our compiler.
+
+\section{Syntax}
+\setlength{\grammarparsep}{20pt plus 1pt minus 1pt}
+\setlength{\grammarindent}{12em}
+
+\begin{grammar}
+
+<decl> ::= "let" <ident>":" <ty> "=" <expr>";"
+
+<ident> ::= (<letter> | _) \{<letter> | 0..9 | _\}
+
+<ty> ::= "()"
+    \alt "bool"
+    \alt <num-ty>
+    \alt "Vec<"<num-ty>"," \{0..9\}$^+$">"
+
+<num-ty> ::= ("u" | "i") \{0..9\}$^+$
+
+<expr> ::= "()"
+    \alt <bool-lit>
+    \alt <int-lit>
+    \alt <vec-lit>
+    \alt "("\{<expr>\}$^+$")"
+    \alt "("<expr> <bop> <expr>")"
+    \alt "(let ("<binders>")" <expr>")"
+    \alt "(if" <expr> <expr> <expr>")"
+
+<binders> ::= <binder> \alt <binder>"," <binders>
+
+<binder> ::= "("<ident>"," <expr>")"
+\alt "("<ident>": " <ty>"," <expr>")"
+
+<num-cmp-op> ::= ">" \alt ">=" \alt "<" \alt "<="
+
+<num-op> ::= "+" \alt "-" \alt "*" \alt "/" 
+
+<cmp-op> ::= "==" \alt "!="
+
+<bop> ::= <num-op>
+\alt <num-cmp-op>
+\alt <cmp-op>
+
+<int-lit> ::= [-]\{0..9\}$^+$
+    \alt [-]\{0..9\}$^+$ ("u" | "i") \{0..9\}$^+$
+
+<bool-lit> ::= "true" \alt "false"
+
+<vec-lit> ::= "["<vec-elems>"]"
+
+<vec-elems> ::= <int-lit> \alt <int-lit>"," <vec-elems>
+\end{grammar}
 
 \section{Typing}
 Zinnia is backed by a bidirectional type system, heavily inspired by Complete and Easy Bidirectional Typing for Higher-Rank Polymorphism and Purescript. Also similarly to Purescript, while the system is based on CAEBDT, our system doesn't use the ``main'' takeaway of the paper -- an ordered context, and stays with a more simple one. This was largely due to familiarity, and in the future I'd like to rewrite it to use ordered contexts. The choice of a bidirectional type system stems from its ease of extensibility compared to HM, which is the more common choice for a language like this. This extensibility allows us to more easily add features like linear typing in the future, which is important in this space as it means we can keep the \textit{pure} and \textit{functional} aspect, while still preserving performance and memory constraints. Currently types are restricted to functions and primitives, just due to time constraints. General universal quantification is supported, but access to it is currently limited to the primitives \texttt{scan} and \texttt{filter}. One thing of note is that while generics over types are generally supported, being generic over a \textit{value} is currently restricted to the vector primitive.
