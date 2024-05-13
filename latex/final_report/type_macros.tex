@@ -60,7 +60,7 @@
 \newcommand{\exsolwild}[2]{({#1} : {#2}\dots)}
 \newcommand{\rexvar}[2]{\exsolnokind{#1}{#2}}
 
-\newcommand{\tyname}[1]{\textsf{\normalfont #1}}
+\newcommand{\tyname}[1]{\fontsz{11pt}{\textsf{#1}}}
 %
 \newcommand{\unitexp}{\text{\normalfont \tt()}}
 \newcommand{\unitty}{\tyname{\normalfont \tt()}}
@@ -70,8 +70,8 @@
 \newcommand{\sn}{\texttt{i}}
 \newcommand{\boolty}{\tyname{Bool}}
 \newcommand{\isnum}[1]{\mathsf{num}(#1)}
-\newcommand{\vecty}[2]{\operatorname{\mathsf{Vec}}(#1, #2)}
-\newcommand{\evecty}{\operatorname{\mathsf{Vec}}}
+\newcommand{\vecty}[2]{\mathsz{12pt}{\operatorname{\mathsf{Vec}}(#1, #2)}}
+\newcommand{\evecty}{\mathsz{11pt}{\operatorname{\mathsf{Vec}}}}
 \newcommand{\faty}[2]{\forall #1.\,#2}
 
 \newcommand{\trientails}{\mathrel{{\rhd}\,}}
@@ -181,3 +181,6 @@
 \newcommand{\declappjudg}[4]{\ensuremath{#1} \entails {#3} \appsep {#2}  \app {#4}}
 
 \newcommand{\family}[2]{\{ {#1}_i \}_1^{#2}}
+
+\newcommand{\bnfas}{\mathrel{::=}}
+\newcommand{\bnfalt}{\mathrel{\mid}}

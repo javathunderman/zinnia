@@ -181,6 +181,28 @@ Filament's implementation and using that as a guide for building our compiler.
 bro typechecks
 
 \begin{figure*}[htbp]
+    \[
+        \begin{array}{llcll}
+            \text{Types} & A, B, C & \bnfas & 
+            \unitty &\bnfalt \alpha \bnfalt \exvar{\alpha} \\ & & & &\bnfalt \faty{\alpha}{A} \\ & & & &\bnfalt A_1, \dots, A_n \to B
+            \\[8pt]
+            \text{Monotypes} & \tau,\sigma,\pi & \bnfas &
+            \unitty &\bnfalt \alpha \bnfalt \exvar{\alpha} \\
+                    & & & &\bnfalt \tau_1, \dots, \tau_n \to \sigma \\
+                    & & & &\bnfalt \vartheta \bnfalt \vartheta_{i, s} \bnfalt \exvar{\vartheta} \bnfalt \exvar{\vartheta}_{i, s} \\
+                    & & & &\bnfalt \vecty{\tau}{c} \bnfalt \exvar{\evecty} \\
+                    & & & &\bnfalt \boolty 
+            \\[8pt]
+            \text{Contexts} & \Gamma, \Delta, \Theta & \bnfas &
+            \cdot
+                            &\bnfalt \Gamma, \alpha 
+            \bnfalt \Gamma, (x:A)
+        \end{array}
+    \]
+    \caption{Syntax of types, monotypes, and contexts.}
+\end{figure*}
+
+\begin{figure*}[htbp]
     \judgbox{\judgetp{\Gamma}{A}}%
     {Under context $\Gamma$, type $A$ is well-formed.}\\
     \judgbox{\judgetps{\Gamma}{n}{A}}%
@@ -219,6 +241,7 @@ bro typechecks
         {\judgetp{\Gamma}{A_1} \\\\ \vdots \\\\ \judgetp{\Gamma}{A_n}}
         {\hphantom{\sum}\judgetps{\Gamma}{n}{A}\hphantom{\sum}}
     \end{mathpar}
+    \caption{Well-formedness of types}
 \end{figure*}
 
 \begin{figure*}[htbp]
@@ -308,6 +331,7 @@ bro typechecks
             {\unijudgs{\Gamma}{A_i}{B_i}{n}{C_i}{\Theta_n}}
         \end{mathpar}
     \end{subfigure}
+    \caption{Unification of types}
 \end{figure*}
 
 \begin{figure*}[htbp]
@@ -316,9 +340,6 @@ bro typechecks
     with output context $\Delta$} \\[1ex]
     \judgbox{\synjudg{\Gamma}{e}{A}{\Delta}}%
     {Under input context $\Gamma$, $e$ synthesizes output type $A$,
-    with output context $\Delta$} \\[1ex]
-    \judgbox{\chkjudgs{\Gamma}{e_i}{n}{A_i}{\Delta}}%
-    {Under input context $\Gamma$, $\family{e}{n}$ checks against types $\family{A}{n}$,
     with output context $\Delta$} \\[1ex]
     \judgbox{\synjudgs{\Gamma}{e_i}{n}{A_i}{\Delta}}%
     {Under input context $\Gamma$, $\family{e}{n}$ synthesizes types $\family{A}{n}$,
@@ -369,14 +390,7 @@ bro typechecks
                 \unijudg{\Theta_2}{\sigma}{\tau}{\pi}{\Delta}
             }
             {\synjudg{\Gamma}{[e_1, \dots, e_{n + 1}]}{\vecty{\pi}{i + 1}}{\Delta}}
-        \end{mathpar}
-    \end{subfigure}
-\end{figure*}
-
-\begin{figure*}[htbp]
-    \ContinuedFloat
-    \begin{subfigure}{\linewidth}
-        \begin{mathpar}
+            \and
             \Infer{\rulename{NumFieldOpSyn}}
             {
                 \textsf{op} \in [+, -, /, \cdot] \\\\
@@ -387,7 +401,14 @@ bro typechecks
                 \unijudg{\Theta}{\tau}{\sigma}{\pi}{\Delta}
             }
             {\synjudg{\Gamma}{l \textsf{ op } r}{\pi}{\Delta}}
-            \and
+        \end{mathpar}
+    \end{subfigure}
+\end{figure*}
+
+\begin{figure*}[htbp]
+    \ContinuedFloat
+    \begin{subfigure}{\linewidth}
+        \begin{mathpar}
             \Infer{\rulename{NumCmpOpSyn}}
             {
                 \textsf{op} \in [<, \le, >, \ge] \\\\
@@ -427,19 +448,19 @@ bro typechecks
             \and
             \Infer{\rulename{Let0Syn}}
             {\synjudg{\Gamma}{b}{B}{\Delta}}
-            {\synjudg{\Gamma}{\texttt{(let () b)}{B}}{\Delta}}
-            \and
+            {\synjudg{\Gamma}{\texttt{(let () b)}}{B}{\Delta}}
+            \\
             \Infer{\rulename{LetSyn}}
             {
-                \synjudg{\Gamma}{e_1}{A}{\Theta} \\
-                \synjudg{\Theta}{\texttt{(\dots) b)}}{B}{\Delta}
+                \synjudg{\Gamma}{e_1}{A}{\Theta} \\\\
+                \synjudg{\Theta, (x: A)}{\texttt{(let (\dots) b)}}{B}{\Delta}
             }
             {\synjudg{\Gamma}{\texttt{(let ((x, e\_1) \dots) b)}}{B}{\Delta}}
             \and
             \Infer{\rulename{LetAnnSyn}}
             {
-                \chkjudg{\Gamma}{e_1}{T}{\Theta} \\
-                \synjudg{\Theta}{\texttt{(let (\dots) b)}}{B}{\Delta}
+                \chkjudg{\Gamma}{e_1}{T}{\Theta} \\\\
+                \synjudg{\Theta, (x: T)}{\texttt{(let (\dots) b)}}{B}{\Delta}
             }
             % LaTeX vs my sane spacing
             {\synjudg{\Gamma}{\texttt{(let ((x:\!\!\!\!\! T, e\_1) \dots) b)}}{B}{\Delta}}
@@ -453,6 +474,7 @@ bro typechecks
             {\synjudg{\Gamma}{\texttt{filter}}{\faty{\evecty_{\alpha}}{\evecty_{\alpha} \to \evecty_{\alpha}}}{\Delta}}
         \end{mathpar}
     \end{subfigure}
+    \caption{Inference and checking of types}
 \end{figure*}
 
 \end{document}
