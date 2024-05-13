@@ -62,6 +62,7 @@ pub fn lexer<'src>(
         "false" => Token::Bool(false),
         "let" => Token::Let,
         "Vec" => Token::Vec,
+        "bool" => Token::BoolT,
         _ => Token::Ident(ident),
     });
 
@@ -255,14 +256,20 @@ fn ty_parser<'tokens, 'src: 'tokens>() -> impl Parser<
         //         (Type::Ident(id, args.unwrap_or_else(Vec::new)), e.span())
         //     });
 
-        let nt = select! {
-            Token::NType(ty) => Type::Num(ty)
+        let prim_tys = select! {
+            Token::NType(ty) => Type::Num(ty),
+            Token::BoolT => Type::Bool
         }
         .map_with(|x, e| (x, e.span()));
 
+        let unit_ty = just(Token::Ctrl('('))
+            .ignore_then(just(Token::Ctrl(')')))
+            .ignored()
+            .map_with(|_, e| (Type::Unit, e.span()));
+
         // NOTE: Vec is a primitive which only takes numeric types
         // and this is currently checked at a *parser* level
-        let vec_t = just(Token::Vec)
+        let vec_ty = just(Token::Vec)
             .ignore_then(
                 select! {
                     Token::NType(ty) => ty
@@ -310,6 +317,6 @@ fn ty_parser<'tokens, 'src: 'tokens>() -> impl Parser<
                 )
             });
 
-        nt.or(vec_t) // .or(generic)
+        prim_tys.or(unit_ty).or(vec_ty) // .or(generic)
     })
 }

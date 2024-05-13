@@ -15,6 +15,7 @@ pub enum Token<'src> {
     // Fn,
     Let,
     If,
+    BoolT,
     NType(NType),
     Vec,
 }
@@ -40,6 +41,7 @@ impl<'src> fmt::Display for Token<'src> {
             Token::Let => write!(f, "let"),
             Token::If => write!(f, "if"),
             Token::Vec => write!(f, "Vec"),
+            Token::BoolT => write!(f, "bool"),
         }
     }
 }
