@@ -182,8 +182,8 @@ bro typechecks
 
 \begin{figure*}[htbp]
     \judgbox{\judgetp{\Gamma}{A}}%
-     {Under context $\Gamma$, type $A$ is well-formed.}\\
-     \judgbox{\judgetps{\Gamma}{n}{A}}%
+    {Under context $\Gamma$, type $A$ is well-formed.}\\
+    \judgbox{\judgetps{\Gamma}{n}{A}}%
     {Under context $\Gamma$, types $\family{A}{n}$ are well-formed.}
 
     \begin{mathpar}
@@ -208,7 +208,7 @@ bro typechecks
         {\judgetp{\Gamma}{\vecty{\tau}{c}}}
         \and
         \Infer{\rulename{ArrowWF}}
-        {\judgetp{\Gamma}{A_1, \dots, A_n} \\ \judgetp{\Gamma}{B}}
+        {\judgetps{\Gamma}{n}{A_i} \\ \judgetp{\Gamma}{B}}
         {\judgetp{\Gamma}{A_1, \dots, A_n \to B}}
         \and
         \Infer{\rulename{ForAllWF}}
@@ -223,90 +223,91 @@ bro typechecks
 
 \begin{figure*}[htbp]
     \judgbox{\unijudg{\Gamma}{A}{B}{C}{\Delta}}%
-        {Under context $\Gamma$, types $A$ and $B$ unify to $C$ with output context $\Delta$.}
-        \judgbox{\unijudgs{\Gamma}{A_i}{B_i}{n}{C_i}{\Delta}}%
+    {Under context $\Gamma$, types $A$ and $B$ unify to $C$ with output context $\Delta$.}
+    \judgbox{\unijudgs{\Gamma}{A_i}{B_i}{n}{C_i}{\Delta}}%
     {Under context $\Gamma$, types $A_i$ and $B_i$ unify to $C_i$ with output context $\Delta$.}
 
     \begin{subfigure}{\linewidth}
-    \begin{mathpar}
-        \Infer{\rulename{EqUni}}
-        {\judgetp{\Gamma}{A}}
-        {\unijudg{\Gamma}{A}{A}{A}{\Gamma}}
-        \and
-        \Infer{\rulename{VecUni}}
-        {\judgetp{\Gamma}{\vecty{\tau}{c}} \\ \judgetp{\Gamma}{\vecty{\sigma}{c}} \\ \unijudg{\Gamma}{\tau}{\sigma}{\pi}{\Delta}}
-        {\unijudg{\Gamma}{\vecty{\tau}{c}}{\vecty{\sigma}{c}}{\vecty{\pi}{c}}{\Delta}}
-        \\
-        \Infer{\rulename{ArrowUni}}
-        {\judgetp{\Gamma}{A_1, \dots, A_n \to R_A} \\ \judgetp{\Gamma}{B_1, \dots, B_N \to R_B} \\\\ \unijudgs{\Gamma}{A_i}{B_i}{n}{C_i}{\Delta} \\ \unijudg{\Gamma}{R_A}{R_B}{R_C}{\Delta}}
-        {\unijudg{\Gamma}{A_1, \dots, A_n \to R_A}{B_1, \dots, B_n \to R_B}{C_1, \dots, C_n \to R_C}{\Delta}}
-        \\
-        % Two 'any' existentials
-        \Infer{\rulename{ExAnyUni}}
-        {\judgetp{\Gamma}{\exvar{\alpha}} \\ \judgetp{\Gamma}{\exvar{\beta}}}
-        {\unijudg{\Gamma}{\exvar{\alpha}}{\exvar{\beta}}{\exvar{\alpha}}{\Delta}}
-        \\
-        % Two unspecified num existentials
-        \Infer{\rulename{ExUNumUni}}
-        {\judgetp{\Gamma}{\exvar{\numty}_1} \\ \judgetp{\Gamma}{\exvar{\numty}_2}}
-        {\unijudg{\Gamma}{\exvar{\numty}_1}{\exvar{\numty}_2}{\exvar{\numty}_1}{\Delta}}
-        \\
-        \Infer{\rulename{ExSSNumUni}}
-    {\judgetp{\Gamma}{\exvar{\numty}_{s_1,c_1}} \\ \judgetp{\Gamma}{\exvar{\numty}_{s_2, c_2}} \\\\ s_3 = s_1 \land s_2 \\ c_3 = \max(c_1, c_2)}
-{\unijudg{\Gamma}{\exvar{\numty}_{s_1,c_1}}{\exvar{\numty}_{s_2, c_2}}{\exvar{\numty}_{s_3, c_3}}{\Delta}}
-        \\
-    \end{mathpar}
+        \begin{mathpar}
+            \Infer{\rulename{EqUni}}
+            {\judgetp{\Gamma}{A}}
+            {\unijudg{\Gamma}{A}{A}{A}{\Gamma}}
+            \and
+            \Infer{\rulename{VecUni}}
+            {\judgetp{\Gamma}{\vecty{\tau}{c}} \\ \judgetp{\Gamma}{\vecty{\sigma}{c}} \\ \unijudg{\Gamma}{\tau}{\sigma}{\pi}{\Delta}}
+            {\unijudg{\Gamma}{\vecty{\tau}{c}}{\vecty{\sigma}{c}}{\vecty{\pi}{c}}{\Delta}}
+            \\
+            \Infer{\rulename{ArrowUni}}
+            {\judgetp{\Gamma}{A_1, \dots, A_n \to R_A} \\ \judgetp{\Gamma}{B_1, \dots, B_N \to R_B} \\\\ \unijudgs{\Gamma}{A_i}{B_i}{n}{C_i}{\Delta} \\ \unijudg{\Gamma}{R_A}{R_B}{R_C}{\Delta}}
+            {\unijudg{\Gamma}{A_1, \dots, A_n \to R_A}{B_1, \dots, B_n \to R_B}{C_1, \dots, C_n \to R_C}{\Delta}}
+            \\
+            % Two 'any' existentials
+            \Infer{\rulename{ExAnyUni}}
+            {\judgetp{\Gamma}{\exvar{\alpha}} \\ \judgetp{\Gamma}{\exvar{\beta}}}
+            {\unijudg{\Gamma}{\exvar{\alpha}}{\exvar{\beta}}{\exvar{\alpha}}{\Delta}}
+            \\
+            % Two unspecified num existentials
+            \Infer{\rulename{ExUNumUni}}
+            {\judgetp{\Gamma}{\exvar{\numty}_1} \\ \judgetp{\Gamma}{\exvar{\numty}_2}}
+            {\unijudg{\Gamma}{\exvar{\numty}_1}{\exvar{\numty}_2}{\exvar{\numty}_1}{\Delta}}
+            \\
+            \Infer{\rulename{ExSSNumUni}}
+            {\judgetp{\Gamma}{\exvar{\numty}_{s_1,c_1}} \\ \judgetp{\Gamma}{\exvar{\numty}_{s_2, c_2}} \\\\ s_3 = s_1 \land s_2 \\ c_3 = \max(c_1, c_2)}
+            {\unijudg{\Gamma}{\exvar{\numty}_{s_1,c_1}}{\exvar{\numty}_{s_2, c_2}}{\exvar{\numty}_{s_3, c_3}}{\Delta}}
+            \\
+        \end{mathpar}
     \end{subfigure}
 \end{figure*}
 
 \begin{figure*}[htbp]
     \ContinuedFloat
     \begin{subfigure}{\linewidth}
-    \begin{mathpar}
-        \Infer{\rulename{ExSUNumUni}}
-    {\judgetp{\Gamma}{\exvar{\numty}_{s_1,c_1}} \\ \judgetp{\Gamma}{\exvar{\numty}}}
-{\unijudg{\Gamma}{\exvar{\numty}_{s_1,c_1}}{\exvar{\numty}}{\exvar{\numty}_{s_1, c_1}}{\Delta}}
-\\
-        \Infer{\rulename{ExVecUni}}
-        {\judgetp{\Gamma}{\exvar{\evecty}_1} \\ \judgetp{\Gamma}{\exvar{\evecty}_2}}
-        {\unijudg{\Gamma}{\exvar{\evecty}_1}{\exvar{\evecty}_2}{\exvar{\evecty_1}}{\Delta}}
-        \\
-        \Infer{\rulename{ExVecCUni}}
-        {\judgetp{\Gamma}{\exvar{\evecty}_1} \\ \judgetp{\Gamma}{\vecty{\tau}{c}}}
-        {\unijudg{\Gamma}{\exvar{\evecty}_1}{\vecty{\tau}{c}}{\vecty{\tau}{c}}{\Delta}}
-        \and
-        \Infer{\rulename{ExUNumCUni}}
-        {\judgetp{\Gamma}{\exvar{\numty}} \\ \judgetp{\Gamma}{\numty_{s, c}}}
-        {\unijudg{\Gamma}{\exvar{\numty}}{\numty_{s, c}}{\numty_{s,c}}{\Delta}}
-        \\
-        \Infer{\rulename{ExSNumCUni}}
-        {
-            \judgetp{\Gamma}{\exvar{\numty}_{s_1, c_1}} \\ \judgetp{\Gamma}{\numty_{s_2, c_2}} \\\\
-            \neg s_1 \lor s_2 \\ c_1 \le c_2
-        }
-        {\unijudg{\Gamma}{\exvar{\numty}_{s_1, c_1}}{\numty_{s_2, c_2}}{\numty_{s_2,c_2}}{\Delta}}
-        \\
-        \Infer{\rulename{ExAnyCUni}}
-        {\judgetp{\Gamma}{\exvar{\alpha}} \\ \judgetp{\Gamma}{\alpha}}
-        {\unijudg{\Gamma}{\exvar{\alpha}}{\alpha}{\alpha}{\Delta}}
-        \and
-        \Infer{\rulename{ForAllUni}}
-    {\judgetp{\Gamma}{\faty{\alpha}{A}} \\ \judgetp{\Gamma}{B} \\ \unijudg{\Gamma, \exvar{\alpha}}{A[\alpha := \exvar{\alpha}]}{B}{B}{\Delta}}
-        {\unijudg{\Gamma}{\faty{\alpha}{A}}{B}{B}{\Delta}}
-        \\
-        \Infer{\rulename{CommutUni}}
-        {\unijudg{\Gamma}{A}{B}{C}{\Delta}}
-        {\unijudg{\Gamma}{B}{A}{C}{\Delta}}
-        \\
-       \Infer{\rulename{Unis}}
-       {\unijudg{\Gamma}{A_1}{B_1}{C_1}{\Theta_1}
-           \\\\ \unijudg{\Theta_1}{A_2}{B_2}{C_2}{\Theta_2}
-           \\\\ \vdots
-           \\\\ \unijudg{\Theta_{n - 1}}{A_n}{B_n}{C_n}{\Theta_n}
-       }
-       {\unijudgs{\Gamma}{A_i}{B_i}{n}{C_i}{\Theta_n}}
-    \end{mathpar}
-\end{subfigure}
+        \begin{mathpar}
+            \Infer{\rulename{ExSUNumUni}}
+            {\judgetp{\Gamma}{\exvar{\numty}_{s_1,c_1}} \\ \judgetp{\Gamma}{\exvar{\numty}}}
+            {\unijudg{\Gamma}{\exvar{\numty}_{s_1,c_1}}{\exvar{\numty}}{\exvar{\numty}_{s_1, c_1}}{\Delta}}
+            \\
+            \Infer{\rulename{ExVecUni}}
+            {\judgetp{\Gamma}{\exvar{\evecty}_1} \\ \judgetp{\Gamma}{\exvar{\evecty}_2}}
+            {\unijudg{\Gamma}{\exvar{\evecty}_1}{\exvar{\evecty}_2}{\exvar{\evecty_1}}{\Delta}}
+            \\
+            \Infer{\rulename{ExVecCUni}}
+            {\judgetp{\Gamma}{\exvar{\evecty}_1} \\ \judgetp{\Gamma}{\vecty{\tau}{c}}}
+            {\unijudg{\Gamma}{\exvar{\evecty}_1}{\vecty{\tau}{c}}{\vecty{\tau}{c}}{\Delta}}
+            \and
+            \Infer{\rulename{ExUNumCUni}}
+            {\judgetp{\Gamma}{\exvar{\numty}} \\ \judgetp{\Gamma}{\numty_{s, c}}}
+            {\unijudg{\Gamma}{\exvar{\numty}}{\numty_{s, c}}{\numty_{s,c}}{\Delta}}
+            \\
+            \Infer{\rulename{ExSNumCUni}}
+            {
+                \judgetp{\Gamma}{\exvar{\numty}_{s_1, c_1}} \\ \judgetp{\Gamma}{\numty_{s_2, c_2}} \\\\
+                \neg s_1 \lor s_2 \\ c_1 \le c_2
+            }
+            {\unijudg{\Gamma}{\exvar{\numty}_{s_1, c_1}}{\numty_{s_2, c_2}}{\numty_{s_2,c_2}}{\Delta}}
+            \\
+            \Infer{\rulename{ExAnyCUni}}
+            {\judgetp{\Gamma}{\exvar{\alpha}} \\ \judgetp{\Gamma}{\alpha}}
+            {\unijudg{\Gamma}{\exvar{\alpha}}{\alpha}{\alpha}{\Delta}}
+            \and
+            \Infer{\rulename{ForAllUni}}
+            {\judgetp{\Gamma}{\faty{\alpha}{A}} \\ \judgetp{\Gamma}{B} \\ \unijudg{\Gamma, \exvar{\alpha}}{A[\alpha := \exvar{\alpha}]}{B}{B}{\Delta}}
+            {\unijudg{\Gamma}{\faty{\alpha}{A}}{B}{B}{\Delta}}
+            \\
+            \Infer{\rulename{CommutUni}}
+            {\unijudg{\Gamma}{A}{B}{C}{\Delta}}
+            {\unijudg{\Gamma}{B}{A}{C}{\Delta}}
+            \\
+            \Infer{\rulename{Unis}}
+            {
+                \unijudg{\Gamma}{A_1}{B_1}{C_1}{\Theta_1} \\\\ 
+                \unijudg{\Theta_1}{A_2}{B_2}{C_2}{\Theta_2} \\\\ 
+                \vdots \\\\ 
+                \unijudg{\Theta_{n - 1}}{A_n}{B_n}{C_n}{\Theta_n}
+            }
+            {\unijudgs{\Gamma}{A_i}{B_i}{n}{C_i}{\Theta_n}}
+        \end{mathpar}
+    \end{subfigure}
 \end{figure*}
 
 \begin{figure*}[htbp]
@@ -324,85 +325,90 @@ bro typechecks
     with output context $\Delta$} \\[1ex]
 
     \begin{subfigure}{\linewidth}
-    \begin{mathpar}
-        \Infer{\rulename{IdSyn}}
-        {\synjudg{\Gamma}{\Gamma[x]}{A}{\Delta}}
-        {\synjudg{\Gamma}{x}{A}{\Delta}}
-        \and
-        \Infer{\rulename{BoolSyn}}
-        {x = \texttt{true} \lor x = \texttt{false}}
-        {\synjudg{\Gamma}{x}{\boolty}{\Gamma}}
-        \and
-        \Infer{\rulename{SNumLitAnnSyn}}
-        {\texttt{x = NuC} \\ C > 0 \\ 0 \le N < 2^C}
-        {\synjudg{\Gamma}{x}{\numty_{\usn, C}}{\Gamma}}
-        \and
-        \Infer{\rulename{UNumLitAnnSyn}}
-        {x = \texttt{NiC} \\ C > 0 \\ -2^{C - 1} \le N \le 2^{C - 1} - 1}
-        {\synjudg{\Gamma}{x}{\numty_{\sn, C}}{\Gamma}}
-        \and
-        \Infer{\rulename{NLitSyn}}
-        {x = N, N \in \mathbb{Z} \\ \textsf{sz} = \operatorname{\textsf{min-width}}(N) \\ \textsf{sgn} = \operatorname{\textsf{sign}}(N)}
-        {\synjudg{\Gamma}{x}{\exvar{\numty}_{\textsf{sgn}, \textsf{sz}}}{\Delta}}
-        \and
-        \Infer{\rulename{Vec1LitSyn}}
-        {\synjudg{\Gamma}{e}{\tau}{\Delta} \\ \judgetp{\Delta}{\vecty{\tau}{1}}}
-        {\synjudg{\Gamma}{[e]}{\vecty{\tau}{1}}{\Delta}}
-        \and
-        \Infer{\rulename{VecLitSyn}}
-        {
-            \synjudg{\Gamma}{[e_1, \dots, e_n]}{\vecty{\tau}{i}}{\Theta_1} \\\\
-            \synjudg{\Theta_1}{e_{n + 1}}{\sigma}{\Theta_2} \\\\
-            \unijudg{\Theta_2}{\sigma}{\tau}{\pi}{\Delta}
-        }
-        {\synjudg{\Gamma}{[e_1, \dots, e_{n + 1}]}{\vecty{\pi}{i + 1}}{\Delta}}
-        \and
-        \Infer{\rulename{NumFieldOpSyn}}
-        {
-            \textsf{op} \in [+, -, /, \cdot] \\\\
-            \synjudg{\Gamma}{l}{\tau}{\Theta} \\
-            \synjudg{\Gamma}{r}{\sigma}{\Theta} \\\\
-            \isnum{\tau} \\
-            \isnum{\sigma} \\\\
-            \unijudg{\Theta}{\tau}{\sigma}{\pi}{\Delta}
-        }
-        {\synjudg{\Gamma}{l \textsf{ op } r}{\pi}{\Delta}}
-    \end{mathpar}
-\end{subfigure}
+        \begin{mathpar}
+            \Infer{\rulename{IdSyn}}
+            {\synjudg{\Gamma}{\Gamma[x]}{A}{\Delta}}
+            {\synjudg{\Gamma}{x}{A}{\Delta}}
+            \and
+            \Infer{\rulename{BoolSyn}}
+            {x = \texttt{true} \lor x = \texttt{false}}
+            {\synjudg{\Gamma}{x}{\boolty}{\Gamma}}
+            \and
+            \Infer{\rulename{SNumLitAnnSyn}}
+            {\texttt{x = NuC} \\ C > 0 \\ 0 \le N < 2^C}
+            {\synjudg{\Gamma}{x}{\numty_{\usn, C}}{\Gamma}}
+            \and
+            \Infer{\rulename{UNumLitAnnSyn}}
+            {x = \texttt{NiC} \\ C > 0 \\ -2^{C - 1} \le N \le 2^{C - 1} - 1}
+            {\synjudg{\Gamma}{x}{\numty_{\sn, C}}{\Gamma}}
+            \and
+            \Infer{\rulename{NLitSyn}}
+            {
+                x = N \\
+                N \in \mathbb{Z} \\ 
+                \textsf{sz} = \operatorname{\textsf{min-width}}(N) \\
+                \textsf{sgn} = \operatorname{\textsf{sign}}(N)
+            }
+            {\synjudg{\Gamma}{x}{\exvar{\numty}_{\textsf{sgn}, \textsf{sz}}}{\Delta}}
+            \and
+            \Infer{\rulename{Vec1LitSyn}}
+            {\synjudg{\Gamma}{e}{\tau}{\Delta} \\ \judgetp{\Delta}{\vecty{\tau}{1}}}
+            {\synjudg{\Gamma}{[e]}{\vecty{\tau}{1}}{\Delta}}
+            \and
+            \Infer{\rulename{VecLitSyn}}
+            {
+                \synjudg{\Gamma}{[e_1, \dots, e_n]}{\vecty{\tau}{i}}{\Theta_1} \\\\
+                \synjudg{\Theta_1}{e_{n + 1}}{\sigma}{\Theta_2} \\\\
+                \unijudg{\Theta_2}{\sigma}{\tau}{\pi}{\Delta}
+            }
+            {\synjudg{\Gamma}{[e_1, \dots, e_{n + 1}]}{\vecty{\pi}{i + 1}}{\Delta}}
+            \and
+            \Infer{\rulename{NumFieldOpSyn}}
+            {
+                \textsf{op} \in [+, -, /, \cdot] \\\\
+                \synjudg{\Gamma}{l}{\tau}{\Theta} \\
+                \synjudg{\Gamma}{r}{\sigma}{\Theta} \\\\
+                \isnum{\tau} \\
+                \isnum{\sigma} \\\\
+                \unijudg{\Theta}{\tau}{\sigma}{\pi}{\Delta}
+            }
+            {\synjudg{\Gamma}{l \textsf{ op } r}{\pi}{\Delta}}
+        \end{mathpar}
+    \end{subfigure}
 \end{figure*}
 
 \begin{figure*}
     \ContinuedFloat
     \begin{subfigure}{\linewidth}
-    \begin{mathpar}
-        \Infer{\rulename{NumCmpOpSyn}}
-        {
-            \textsf{op} \in [<, \le, >, \ge] \\\\
-            \synjudg{\Gamma}{l}{\tau}{\Theta} \\
-            \synjudg{\Gamma}{r}{\sigma}{\Theta} \\\\
-            \isnum{\tau} \\
-            \isnum{\sigma} \\\\
-            \unijudg{\Theta}{\tau}{\sigma}{\pi}{\Delta}
-        }
-        {\synjudg{\Gamma}{l \textsf{ op } r}{\boolty}{\Delta}}
-        \and
-        \Infer{\rulename{EqOpSyn}}
-        {
-            \textsf{op} \in [=, !=] \\\\
-            \synjudg{\Gamma}{l}{\tau}{\Theta} \\
-            \synjudg{\Gamma}{r}{\sigma}{\Theta} \\\\
-            \unijudg{\Theta}{\tau}{\sigma}{\pi}{\Delta}
-        }
-        {\synjudg{\Gamma}{l \textsf{ op } r}{\boolty}{\Delta}}
-        \and
-        \Infer{\rulename{CallSyn}}
-        {
-            \synjudg{\Gamma}{f}{F}{\Theta_1} \\\\
-            \synjudgs{\Theta_1}{e_i}{n}{A_i}{\Theta_2} \\\\
-            \unijudg{\Theta_2}{F}{A_i, \dots, A_n \to R_A}{B_i, \dots, B_n \to R_B}{\Delta}
-        }
-        {\synjudg{\Gamma}{(f\; A_1\; \dots\; A_n)}{R_B}{\Delta}}
-    \end{mathpar}
+        \begin{mathpar}
+            \Infer{\rulename{NumCmpOpSyn}}
+            {
+                \textsf{op} \in [<, \le, >, \ge] \\\\
+                \synjudg{\Gamma}{l}{\tau}{\Theta} \\
+                \synjudg{\Gamma}{r}{\sigma}{\Theta} \\\\
+                \isnum{\tau} \\
+                \isnum{\sigma} \\\\
+                \unijudg{\Theta}{\tau}{\sigma}{\pi}{\Delta}
+            }
+            {\synjudg{\Gamma}{l \textsf{ op } r}{\boolty}{\Delta}}
+            \and
+            \Infer{\rulename{EqOpSyn}}
+            {
+                \textsf{op} \in [=, !=] \\\\
+                \synjudg{\Gamma}{l}{\tau}{\Theta} \\
+                \synjudg{\Gamma}{r}{\sigma}{\Theta} \\\\
+                \unijudg{\Theta}{\tau}{\sigma}{\pi}{\Delta}
+            }
+            {\synjudg{\Gamma}{l \textsf{ op } r}{\boolty}{\Delta}}
+            \and
+            \Infer{\rulename{CallSyn}}
+            {
+                \synjudg{\Gamma}{f}{F}{\Theta_1} \\\\
+                \synjudgs{\Theta_1}{e_i}{n}{A_i}{\Theta_2} \\\\
+                \unijudg{\Theta_2}{F}{A_i, \dots, A_n \to R_A}{B_i, \dots, B_n \to R_B}{\Delta}
+            }
+            {\synjudg{\Gamma}{(f\; A_1\; \dots\; A_n)}{R_B}{\Delta}}
+        \end{mathpar}
     \end{subfigure}
 \end{figure*}
 
