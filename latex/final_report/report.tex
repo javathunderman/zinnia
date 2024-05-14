@@ -107,9 +107,19 @@ Calyx also had better documentation for its IR, and a small standard library of 
 into circuits synthesized when the compiler lowers from the IR to a Verilog hardware description.
 
 \subsection{Parsing and Typing}
+Zinnia's parsing is a fairly standard approach. We used the Rust parser-combinator library \texttt{chumsky} for both the tokenization and subsequent parsing steps.
+
 Zinnia is backed by a bidirectional type system, heavily inspired by Complete and Easy Bidirectional Typing for Higher-Rank Polymorphism and Purescript \cite{dunfield_complete_2013}. Also similarly to Purescript, while the system is based on CAEBDT, our system doesn't use the ``main'' takeaway of the paper -- an ordered context, and stays with a more simple one. This was largely due to familiarity, and in the future we would like to rewrite it to use ordered contexts. The choice of a bidirectional type system stems from its ease of extensibility compared to HM, which is the more common choice for a language like this. This extensibility allows us to more easily add features like linear typing in the future, which is important in this space as it means we can keep the \textit{pure} and \textit{functional} aspect, while still preserving performance and memory constraints. Currently types are restricted to functions and primitives, just due to time constraints. General universal quantification is supported, but access to it is currently limited to the \texttt{scan} primitive. While generics over types are generally supported, being generic over a \textit{value} is currently restricted to the vector primitive.
 
 Full semantics and syntax for our language can be found at the end of our report.
+
+\subsubsection{Ease of Use}
+One key consideration when designing the typechecker and parser was support for rich error reports. The parser has support for error backtracking, allowing for better reports on syntax. Similarly, the typechecker preserves as much location info as possible in order to give full-featured errors.
+
+\begin{figure}[h]
+    \includegraphics[width=\linewidth]{err.png}
+    \caption{An error report for mismatched operands}
+\end{figure}
 
 \subsection{Code Generation}
 The compiler that we wrote for Zinnia traverses the AST recursively. Since there is no concept of dynamic
