@@ -20,7 +20,7 @@
 \usepackage{amsfonts}
 \usepackage{mathtools}
 \usepackage{subcaption}
-\usepackage{syntax}
+\usepackage[nounderscore]{syntax}
 \usepackage{circuitikz}
 
 \NewDocumentCommand{\codeword}{v}{%
@@ -283,7 +283,7 @@ The codebase for Zinnia is available on GitHub: \url{https://github.com/javathun
 
 <decl> ::= "let" <ident>":" <ty> "=" <expr>";"
 
-<ident> ::= (<letter> | _) \{<letter> | 0..9 | _\}
+<ident> ::= (<letter> | \_) \{<letter> | 0..9 | \_\}
 
 <ty> ::= "()"
     \alt "bool"
@@ -619,5 +619,11 @@ The codebase for Zinnia is available on GitHub: \url{https://github.com/javathun
     \end{subfigure}
     \caption{Inference and checking of types}
 \end{figure*}
+
+% I, in fact, do not want my figures in the middle of my bibliography
+\clearpage
+
+\nocite{*}
 \printbibliography
+
 \end{document}
