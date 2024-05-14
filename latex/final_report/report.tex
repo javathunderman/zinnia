@@ -244,7 +244,7 @@ an Arduino). Unfortunately, setting the clock line for the circuit loaded onto t
 for the USB programmer chip, which requires a 12MHz signal in order to function correctly. This misconfiguration
 prevented us from loading new circuits onto the FPGA, and required us to use simulation as our primary evaluation
 method instead.
-\begin{figure}
+\begin{figure}[H]
 \includegraphics{images/spi.png}
 \caption{Half duplex SPI waveform, where an Arduino would have controlled the SCK and SDO lines and the FPGA would bit shift
 the received values in block RAM.}
