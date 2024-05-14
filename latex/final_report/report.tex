@@ -280,6 +280,9 @@ is due to limitations in the Calyx standard library, future libraries could be u
 accesses to these memories instead of the current exclusive read/write access pattern.
 
 We were also not able to show our circuits running on real hardware, which was the ultimate goal of the project.
+Our current version of Zinnia would not be usable with real software defined radio/signal processing workloads since our hardware interfaces are not finished yet.
+However, we feel that there is enough expressivity in the language (e.g. customizable bit widths, a clean and functional syntax)
+that could eventually make it practical for creating correct signal processing pipelines.
 
 One obstacle that we did not foresee was the difficulty of working with the Calyx IR from Rust. While LLVM's CIRCT project
 has a robust Rust API, it seems that the authors of the Calyx IR primarily want language authors to use their IR from
