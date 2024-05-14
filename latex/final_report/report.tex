@@ -1,5 +1,6 @@
 \documentclass[12pt]{article}
-
+\usepackage[backend=biber]{biblatex}
+\addbibresource{report.bib}
 \usepackage[T1]{fontenc}
 \usepackage{graphicx} % Required for inserting images
 \usepackage[margin=1in]{geometry}
@@ -162,7 +163,12 @@ an Arduino). Unfortunately, setting the clock line for the circuit loaded onto t
 for the USB programmer chip, which requires a 12MHz signal in order to function correctly. This misconfiguration
 prevented us from loading new circuits onto the FPGA, and required us to use simulation as our primary evaluation
 method instead.
-
+\begin{figure}
+\includegraphics{images/spi.png}
+\caption{Half duplex SPI waveform, where an Arduino would have controlled the SCK and SDO lines and the FPGA would bit shift
+the received values in block RAM.}
+\cite{dunfield_complete_2013}
+\end{figure}
 \section{Conclusion}
 In the end, we were able to implement a version of the scan primitive in the Calyx IR, implement a bidirectional
 typing system, add some basic language features into our language, and use external circuit verification and simulation
@@ -211,7 +217,7 @@ Filament's implementation and using that as a guide for building our compiler.
 
 <num-cmp-op> ::= ">" \alt ">=" \alt "<" \alt "<="
 
-<num-op> ::= "+" \alt "-" \alt "*" \alt "/" 
+<num-op> ::= "+" \alt "-" \alt "*" \alt "/"
 
 <cmp-op> ::= "==" \alt "!="
 
@@ -235,7 +241,7 @@ Zinnia is backed by a bidirectional type system, heavily inspired by Complete an
 \begin{figure*}[htbp]
     \[
         \begin{array}{llcll}
-            \text{Types} & A, B, C & \bnfas & 
+            \text{Types} & A, B, C & \bnfas &
             \unitty &\bnfalt \alpha \bnfalt \exvar{\alpha} \\ & & & &\bnfalt \faty{\alpha}{A} \\ & & & &\bnfalt A_1, \dots, A_n \to B
             \\[8pt]
             \text{Monotypes} & \tau,\sigma,\pi & \bnfas &
@@ -243,11 +249,11 @@ Zinnia is backed by a bidirectional type system, heavily inspired by Complete an
                     & & & &\bnfalt \tau_1, \dots, \tau_n \to \sigma \\
                     & & & &\bnfalt \vartheta \bnfalt \vartheta_{i, s} \bnfalt \exvar{\vartheta} \bnfalt \exvar{\vartheta}_{i, s} \\
                     & & & &\bnfalt \vecty{\tau}{c} \bnfalt \exvar{\evecty} \\
-                    & & & &\bnfalt \boolty 
+                    & & & &\bnfalt \boolty
             \\[8pt]
             \text{Contexts} & \Gamma, \Delta, \Theta & \bnfas &
             \cdot
-                            &\bnfalt \Gamma, \alpha 
+                            &\bnfalt \Gamma, \alpha
             \bnfalt \Gamma, (x:A)
         \end{array}
     \]
@@ -375,9 +381,9 @@ Zinnia is backed by a bidirectional type system, heavily inspired by Complete an
             \\
             \Infer{\rulename{Unis}}
             {
-                \unijudg{\Gamma}{A_1}{B_1}{C_1}{\Theta_1} \\\\ 
-                \unijudg{\Theta_1}{A_2}{B_2}{C_2}{\Theta_2} \\\\ 
-                \vdots \\\\ 
+                \unijudg{\Gamma}{A_1}{B_1}{C_1}{\Theta_1} \\\\
+                \unijudg{\Theta_1}{A_2}{B_2}{C_2}{\Theta_2} \\\\
+                \vdots \\\\
                 \unijudg{\Theta_{n - 1}}{A_n}{B_n}{C_n}{\Theta_n}
             }
             {\unijudgs{\Gamma}{A_i}{B_i}{n}{C_i}{\Theta_n}}
@@ -425,7 +431,7 @@ Zinnia is backed by a bidirectional type system, heavily inspired by Complete an
             \Infer{\rulename{NLitSyn}}
             {
                 x = N \\
-                N \in \mathbb{Z} \\ 
+                N \in \mathbb{Z} \\
                 \textsf{sz} = \operatorname{\textsf{min-width}}(N) \\
                 \textsf{sgn} = \operatorname{\textsf{sign}}(N)
             }
@@ -528,5 +534,5 @@ Zinnia is backed by a bidirectional type system, heavily inspired by Complete an
     \end{subfigure}
     \caption{Inference and checking of types}
 \end{figure*}
-
+\printbibliography
 \end{document}
