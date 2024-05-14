@@ -21,6 +21,7 @@
 \usepackage{mathtools}
 \usepackage{subcaption}
 \usepackage{syntax}
+\usepackage{circuitikz}
 
 \NewDocumentCommand{\codeword}{v}{%
 \texttt{\textcolor{blue}{#1}}%
@@ -102,30 +103,110 @@ We also considered emitting circuits using CIRCT, the LLVM framework that allows
 MLIR that is subsequently lowered to a Verilog hardware description, however we quickly found that
 CIRCT lacked the project maturity needed to develop even a basic language around it. This included
 no binaries to link against, thus requiring us to compile a large subset of the LLVM project, which was not practical.
-<<<<<<< HEAD
 Calyx also had better documentation for its IR, and a small standard library of memory cells that could be easily integrated
 into circuits synthesized when the compiler lowers from the IR to a Verilog hardware description.
+
+\section{Parsing and Typing}
+Zinnia is backed by a bidirectional type system, heavily inspired by Complete and Easy Bidirectional Typing for Higher-Rank Polymorphism and Purescript. Also similarly to Purescript, while the system is based on CAEBDT, our system doesn't use the ``main'' takeaway of the paper -- an ordered context, and stays with a more simple one. This was largely due to familiarity, and in the future we would like to rewrite it to use ordered contexts. The choice of a bidirectional type system stems from its ease of extensibility compared to HM, which is the more common choice for a language like this. This extensibility allows us to more easily add features like linear typing in the future, which is important in this space as it means we can keep the \textit{pure} and \textit{functional} aspect, while still preserving performance and memory constraints. Currently types are restricted to functions and primitives, just due to time constraints. General universal quantification is supported, but access to it is currently limited to the \texttt{scan} primitive. While generics over types are generally supported, being generic over a \textit{value} is currently restricted to the vector primitive.
+
+Full semantics and syntax for our language can be found at the end of our report.
+
 \subsection{Code Generation}
 The compiler that we wrote for Zinnia traverses the AST recursively. Since there is no concept of dynamic
 memory allocation for circuits, we focused on generating the required memories for the circuit first.
 
-Additionally, while Calyx has a "par" primitive for parallelizing parts of the circuit, Zinnia currently only generates
-circuits using the "seq" ("sequential") control flow keyword for easier debugging and testing. Even though parallelism
+At the top level, "let" bindings are used to generate register memories (for integers) and combinational memories
+(for vectors). For constant values, we use Calyx's "structure" macro to instantiate a "constant" register with the
+requried value at compile time, which is subsequently removed in the process of optimization and lowering to Verilog.
+Variable bindings are stored in a hashmap and are accessed using either the component name (which is guaranteed
+to be unique through the Calyx frontend API) or the user-defined variable name.
+
+For binary operations or if expressions, we need to use comparator primitives and wire them correctly - to do this,
+we call the memory generation function on each of the parameters of the operation, and then use a "wire"
+generation function which generates assignments between the inputs and outputs of the memories and logical primitives.
+After this is complete, we generate a small schedule of operations depending on the subexpression that we are compiling, using
+the Calyx "seq" block to sequentially order operations (e.g. ensuring that a register memory gets its constant value
+before the addition actually takes place). Finally, the top most register memory's value is copied into a specially
+instantiated combinational memory. This is because register memories in Calyx do not have latching/persistence guarantees,
+however, values in combinational/vector memories can be examined as part of the circuit simulation.
+
+\begin{figure}[!ht]
+    \centering
+    \resizebox{1\textwidth}{!}{%
+    \begin{circuitikz}
+    \tikzstyle{every node}=[font=\LARGE]
+    \node [font=\LARGE] at (5,16.75) {(let ((x, 10), (y, 8)) (+ x y))};
+    \draw  (0.5,17.5) rectangle (9.5,16);
+    \draw  (2.25,17.25) rectangle (4.5,16.25);
+    \draw  (4.5,17.25) rectangle (6.75,16.25);
+    \draw  (7,17.25) rectangle (9.25,16.25);
+    \draw [](1.25,16) to[short] (1.25,13.5);
+    \draw [](3.5,16.25) to[short] (3.5,14.5);
+    \draw [](5.75,16.25) to[short] (5.75,14.5);
+    \draw [](8.75,16.25) to[short] (8.75,14.5);
+    \node [font=\LARGE] at (1,12.75) {Let};
+    \node [font=\LARGE] at (5,14) {Binding (Id, Value)};
+    \node [font=\LARGE] at (13.75,13.25) {Binop(Id, Id)};
+    \draw [](8.75,14.5) to[short] (12,14.5);
+    \draw [](12,14.5) to[short] (12,13.75);
+    \draw  (8.5,10.5) rectangle (15,9);
+    \draw  (8.5,7.5) rectangle (15,6);
+    \node [font=\LARGE] at (11.5,9.75) {x: reg0: 10};
+    \node [font=\LARGE] at (11.5,6.75) {y: reg1: 8};
+    \draw[] (8.5,9.75) to[short] (5.5,9.75);
+    \draw[] (8.5,6.5) to[short] (5.5,6.5);
+    \draw  (-0.25,9.5) rectangle (4.75,8);
+    \draw  (-0.25,8) rectangle (4.75,6.75);
+    \node [font=\LARGE] at (1.75,8.75) {adder};
+    \node [font=\LARGE] at (2,7.5) {adder\_res};
+    \draw [](5.5,9.75) to[short] (5.5,9);
+    \draw[] (5.5,9) to[short] (4.75,9);
+    \draw [](5.5,6.5) to[short] (5.5,7.25);
+    \draw[] (5.5,7.25) to[short] (4.75,7.25);
+    \draw [](2.25,6.75) to[short] (2.25,4.25);
+    \draw  (-0.25,4.25) rectangle (5,2.75);
+    \node [font=\LARGE] at (2.25,3.5) {res\_mem};
+    \end{circuitikz}
+    }%
+    \caption{Simplified compilation/memory instantiation flow for a Zinnia program.}
+    \end{figure}
+
+\subsection{Supporting Parallelization in Compilation}
+One of the main goals of our DSL was to improve parallelism. While Calyx has a "par" primitive for parallelizing parts of the circuit,
+Zinnia currently only generates circuits using the "seq" ("sequential") control flow keyword for easier debugging and testing. Even though parallelism
 at the user level is limited, we still hoped to expose some of the potential parallel speedups through the use
 of a function primitive that could be used to get implicit parallelism.
 
-\subsection{Prefix Sums Scan}
-To expose some parallelism without explicitly supporting copmiling using the "par" control flow block,
-we implemented a version of parallel scan using the prefix sums algorithm.
+\subsubsection{Prefix Sums Scan}
+To expose some parallelism without explicitly supporting compiling using the "par" control flow block,
+we implemented a version of parallel scan using the prefix sums algorithm. This primitive takes
+a reference to a vector with 8 integers and performs the addition operation, returning a modified
+array where the latter half of the array contains the scan result.
+
+This function was supposed to be invoked as a primitive within the language, with the compiler inlining
+a separate Calyx component whose input memories would be populated with a reference to the vector supplied
+by the caller. However, while we were able to test the scan component as a separate circuit generated from our
+hand-written IR code, we were not able to fully resolve linking issues that would allow us to pass memories by
+reference into subcomponents.
+
+\begin{figure}[H]
+    \includegraphics[height=20em]{images/prefix\_sums.png}
+    \caption{Screenshot of the final state of the prefix sums array - a separate vector memory
+    is instantiated in the IR implementation to track the intermediate values as they flow
+    up and down the prefix-sums tree.}
+\end{figure}
 
 \section{Evaluation}
 We decided to evaluate our language in three different ways: correctness testing, scalability testing, and hardware testing.
 \subsection{Correctness Testing}
 To verify the correctness of the language, we used the Cocotb RTL testing framework. This allows
 us to run a simulated version of the circuit's clock and write unit tests around elements of the circuits
-that we generate.
+that we generate. Although we did not have time to implement extensive tests, we were able to verify
+correct execution using unit tests for the binary operations supported by the language,
+as well as correct outputs values for the scan primitive (which was tested separately since we could not link
+this into the language easily).
 \subsection{Scalability Testing}
-Second, we focused on testing scalability. For this, we focused on evaluating the "scan" primitive, since
+Second, we wanted to test the scalability of our language. For this, we focused on evaluating the "scan" primitive, since
 it is the main way end-users would be able to obtain parallelism through the language (at least, as it is currently implemented).
 We found that in simulation, our parallel scan implementation always took 71 cycles to generate outputs, given a set of 8 integers
 to iterate over. While parallel scan theoretically provides work bounds of $O(n)$ and span bounds of $O(lg(n))$, in practice the
@@ -167,15 +248,19 @@ method instead.
 \includegraphics{images/spi.png}
 \caption{Half duplex SPI waveform, where an Arduino would have controlled the SCK and SDO lines and the FPGA would bit shift
 the received values in block RAM.}
-\cite{dunfield_complete_2013}
 \end{figure}
 \section{Conclusion}
 In the end, we were able to implement a version of the scan primitive in the Calyx IR, implement a bidirectional
 typing system, add some basic language features into our language, and use external circuit verification and simulation
 tools to show that our circuits performed as the high level program specified.
 
-However, there is still room for improvement - we do not have support for looping structures, even though the Calyx IR supports
-it. We were also not able to show our circuits running on real hardware, which was the ultimate goal of the project.
+However, there is still room for improvement, both in terms of feature support and performance - we do not have support for looping structures,
+even though the Calyx IR supports it. Additionally, our parallelism benefits are limited by the fact that we can only really exploit
+the parallelism present in the hardware through the scan primitive, even though Calyx supports parallelized control schedules. While part of this
+is due to limitations in the Calyx standard library, future libraries could be used to enable concurrent read/exclusive write
+accesses to these memories instead of the current exclusive read/write access pattern.
+
+We were also not able to show our circuits running on real hardware, which was the ultimate goal of the project.
 
 One obstacle that we did not foresee was the difficulty of working with the Calyx IR from Rust. While LLVM's CIRCT project
 has a robust Rust API, it seems that the authors of the Calyx IR primarily want language authors to use their IR from
@@ -183,6 +268,12 @@ a Python builder module or the CIRCT toolchain, even though the Filament HDL (wh
 group and uses Calyx as its IR) is also written in Rust. For some issues, like linking against the combinational memory
 primitives or inlining other components, the Rust library documentation was so poor that we ended up looking through
 Filament's implementation and using that as a guide for building our compiler.
+
+Altogether, this was a very interesting exploration into building a domain specific language that interacted so closely
+with hardware, and was a great way to get experience with compilers, parallel algorithms, type systems, and using FPGAs.
+We hope to continue working on Zinnia as a hobby research project over the summer.
+
+The codebase for Zinnia is available on GitHub: \url{https://github.com/javathunderman/zinnia}
 
 \section{Syntax}
 \setlength{\grammarparsep}{20pt plus 1pt minus 1pt}
@@ -236,8 +327,6 @@ Filament's implementation and using that as a guide for building our compiler.
 \end{grammar}
 
 \section{Typing}
-Zinnia is backed by a bidirectional type system, heavily inspired by Complete and Easy Bidirectional Typing for Higher-Rank Polymorphism and Purescript. Also similarly to Purescript, while the system is based on CAEBDT, our system doesn't use the ``main'' takeaway of the paper -- an ordered context, and stays with a more simple one. This was largely due to familiarity, and in the future I'd like to rewrite it to use ordered contexts. The choice of a bidirectional type system stems from its ease of extensibility compared to HM, which is the more common choice for a language like this. This extensibility allows us to more easily add features like linear typing in the future, which is important in this space as it means we can keep the \textit{pure} and \textit{functional} aspect, while still preserving performance and memory constraints. Currently types are restricted to functions and primitives, just due to time constraints. General universal quantification is supported, but access to it is currently limited to the primitives \texttt{scan} and \texttt{filter}. One thing of note is that while generics over types are generally supported, being generic over a \textit{value} is currently restricted to the vector primitive.
-
 \begin{figure*}[htbp]
     \[
         \begin{array}{llcll}
