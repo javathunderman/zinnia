@@ -75,7 +75,7 @@ As such, we identified two research questions that we aimed to answer in this pr
 \section{Literature Review}
 We started by conducting a literature review of existing languages designed for DSP problems.
 \subsection{Ziria}
-One of the first papers we considered as Ziria, a domain specific language that was
+One of the first papers we considered as Ziria \cite{stewart_ziria_2015}, a domain specific language that was
 designed to aid development in implementations of the physical layer of wireless protocols.
 Ziria presented a functional language design syntax, and was specifically intended for wireless protocol
 implementations on IOT hardware. As such, it contained many primitives that we thought would
@@ -89,7 +89,7 @@ where Microsoft deployed FPGAs to accelerate running PageRank as part of their B
 However, FPGAs are notoriously difficult to program, and generally require extremely fine-grained circuit
 configurations written in a hardware description language like Verilog.
 
-Calyx is an intermediate representation for compilers developed by the CAPRA research group at Cornell.
+Calyx \cite{nigam_compiler_2021} is an intermediate representation for compilers developed by the CAPRA research group at Cornell.
 It defines circuits in three distinct parts - a collection of memories (consisting of combinational memories/
 flip-flops and registers), wire groups (which denote assignments between different memory components
 in the circuit), and a statically defined control schedule that orders wire assignments.
@@ -106,8 +106,8 @@ no binaries to link against, thus requiring us to compile a large subset of the 
 Calyx also had better documentation for its IR, and a small standard library of memory cells that could be easily integrated
 into circuits synthesized when the compiler lowers from the IR to a Verilog hardware description.
 
-\section{Parsing and Typing}
-Zinnia is backed by a bidirectional type system, heavily inspired by Complete and Easy Bidirectional Typing for Higher-Rank Polymorphism and Purescript. Also similarly to Purescript, while the system is based on CAEBDT, our system doesn't use the ``main'' takeaway of the paper -- an ordered context, and stays with a more simple one. This was largely due to familiarity, and in the future we would like to rewrite it to use ordered contexts. The choice of a bidirectional type system stems from its ease of extensibility compared to HM, which is the more common choice for a language like this. This extensibility allows us to more easily add features like linear typing in the future, which is important in this space as it means we can keep the \textit{pure} and \textit{functional} aspect, while still preserving performance and memory constraints. Currently types are restricted to functions and primitives, just due to time constraints. General universal quantification is supported, but access to it is currently limited to the \texttt{scan} primitive. While generics over types are generally supported, being generic over a \textit{value} is currently restricted to the vector primitive.
+\subsection{Parsing and Typing}
+Zinnia is backed by a bidirectional type system, heavily inspired by Complete and Easy Bidirectional Typing for Higher-Rank Polymorphism and Purescript \cite{dunfield_complete_2013}. Also similarly to Purescript, while the system is based on CAEBDT, our system doesn't use the ``main'' takeaway of the paper -- an ordered context, and stays with a more simple one. This was largely due to familiarity, and in the future we would like to rewrite it to use ordered contexts. The choice of a bidirectional type system stems from its ease of extensibility compared to HM, which is the more common choice for a language like this. This extensibility allows us to more easily add features like linear typing in the future, which is important in this space as it means we can keep the \textit{pure} and \textit{functional} aspect, while still preserving performance and memory constraints. Currently types are restricted to functions and primitives, just due to time constraints. General universal quantification is supported, but access to it is currently limited to the \texttt{scan} primitive. While generics over types are generally supported, being generic over a \textit{value} is currently restricted to the vector primitive.
 
 Full semantics and syntax for our language can be found at the end of our report.
 
@@ -179,7 +179,7 @@ of a function primitive that could be used to get implicit parallelism.
 
 \subsubsection{Prefix Sums Scan}
 To expose some parallelism without explicitly supporting compiling using the "par" control flow block,
-we implemented a version of parallel scan using the prefix sums algorithm. This primitive takes
+we implemented a version of parallel scan using the prefix sums algorithm \cite{blelloch_prefix_1990}. This primitive takes
 a reference to a vector with 8 integers and performs the addition operation, returning a modified
 array where the latter half of the array contains the scan result.
 
@@ -190,6 +190,7 @@ hand-written IR code, we were not able to fully resolve linking issues that woul
 reference into subcomponents.
 
 \begin{figure}[H]
+    \centering
     \includegraphics[height=20em]{images/prefix\_sums.png}
     \caption{Screenshot of the final state of the prefix sums array - a separate vector memory
     is instantiated in the IR implementation to track the intermediate values as they flow
@@ -199,12 +200,19 @@ reference into subcomponents.
 \section{Evaluation}
 We decided to evaluate our language in three different ways: correctness testing, scalability testing, and hardware testing.
 \subsection{Correctness Testing}
-To verify the correctness of the language, we used the Cocotb RTL testing framework. This allows
+To verify the correctness of the language, we attmepted to use the Cocotb RTL testing framework and the Icarus Verilog simulator. This allows
 us to run a simulated version of the circuit's clock and write unit tests around elements of the circuits
-that we generate. Although we did not have time to implement extensive tests, we were able to verify
+that we generate. Although we did not have time to implement extensive tests, we were able to informally verify
 correct execution using unit tests for the binary operations supported by the language,
 as well as correct outputs values for the scan primitive (which was tested separately since we could not link
-this into the language easily).
+this into the language easily) through Icarus Verilog. We were also able to generate timing diagrams that we
+could view with GTKWave, and this showed that values used during the circuit's evaluation were being loaded into registers correctly.
+However, we would have wanted to use randomized testing with cocotb to be more confident in our compiler's correctness.
+
+\begin{figure}
+    \includegraphics[width=\linewidth]{images/timing_sim.png}
+    \caption{Example timing diagram for the program shown in Figure 1. The operands (represented in hex form here) are loaded into reg0 and reg1, before being loaded into the "left" and "right" inputs of the combinational adder. The adder register's result (5th line down) is then moved into the "output" combinational memory using its "write\_data" line. Finally, the last line displays the clock signal for the whole circuit. }
+\end{figure}
 \subsection{Scalability Testing}
 Second, we wanted to test the scalability of our language. For this, we focused on evaluating the "scan" primitive, since
 it is the main way end-users would be able to obtain parallelism through the language (at least, as it is currently implemented).
@@ -248,6 +256,7 @@ method instead.
 \includegraphics{images/spi.png}
 \caption{Half duplex SPI waveform, where an Arduino would have controlled the SCK and SDO lines and the FPGA would bit shift
 the received values in block RAM.}
+\cite{mathworks_support_nodate}
 \end{figure}
 \section{Conclusion}
 In the end, we were able to implement a version of the scan primitive in the Calyx IR, implement a bidirectional
