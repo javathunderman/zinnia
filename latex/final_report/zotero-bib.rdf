@@ -214,4 +214,175 @@
             </dcterms:URI>
         </dc:identifier>
     </bib:Article>
+    <rdf:Description rdf:about="https://www.mathworks.com/help/simulink/supportpkg/raspberrypi_ug/support-spi-communication.html">
+        <z:itemType>document</z:itemType>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                       <foaf:surname>Mathworks</foaf:surname>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:title>Support SPI Communication</dc:title>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>https://www.mathworks.com/help/simulink/supportpkg/raspberrypi_ug/support-spi-communication.html</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+    </rdf:Description>
+    <rdf:Description rdf:about="urn:isbn:978-1-4503-7613-6">
+        <z:itemType>conferencePaper</z:itemType>
+        <dcterms:isPartOf>
+            <bib:Journal>
+                <dc:identifier>ISBN 978-1-4503-7613-6</dc:identifier>
+                <dc:title>Proceedings of the 41st ACM SIGPLAN Conference on Programming Language Design and Implementation</dc:title>
+                <dc:identifier>DOI 10.1145/3385412.3385983</dc:identifier>
+            </bib:Journal>
+        </dcterms:isPartOf>
+        <dc:publisher>
+            <foaf:Organization>
+                <vcard:adr>
+                    <vcard:Address>
+                       <vcard:locality>London UK</vcard:locality>
+                    </vcard:Address>
+                </vcard:adr>
+                <foaf:name>ACM</foaf:name>
+            </foaf:Organization>
+        </dc:publisher>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Durst</foaf:surname>
+                        <foaf:givenName>David</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Feldman</foaf:surname>
+                        <foaf:givenName>Matthew</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Huff</foaf:surname>
+                        <foaf:givenName>Dillon</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Akeley</foaf:surname>
+                        <foaf:givenName>David</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Daly</foaf:surname>
+                        <foaf:givenName>Ross</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Bernstein</foaf:surname>
+                        <foaf:givenName>Gilbert Louis</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Patrignani</foaf:surname>
+                        <foaf:givenName>Marco</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Fatahalian</foaf:surname>
+                        <foaf:givenName>Kayvon</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Hanrahan</foaf:surname>
+                        <foaf:givenName>Pat</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <link:link rdf:resource="#item_78"/>
+        <dc:title>Type-directed scheduling of streaming accelerators</dc:title>
+        <dc:date>2020-06-11</dc:date>
+        <z:language>en</z:language>
+        <z:libraryCatalog>DOI.org (Crossref)</z:libraryCatalog>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>https://dl.acm.org/doi/10.1145/3385412.3385983</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dcterms:dateSubmitted>2024-05-14 16:38:04</dcterms:dateSubmitted>
+        <bib:pages>408-422</bib:pages>
+        <bib:presentedAt>
+            <bib:Conference>
+                <dc:title>PLDI '20: 41st ACM SIGPLAN International Conference on Programming Language Design and Implementation</dc:title>
+            </bib:Conference>
+        </bib:presentedAt>
+    </rdf:Description>
+    <z:Attachment rdf:about="#item_78">
+        <z:itemType>attachment</z:itemType>
+        <dc:title>Full Text</dc:title>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>https://dl.acm.org/doi/pdf/10.1145/3385412.3385983</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+        <dcterms:dateSubmitted>2024-05-14 16:38:05</dcterms:dateSubmitted>
+        <z:linkMode>1</z:linkMode>
+        <link:type>application/pdf</link:type>
+    </z:Attachment>
+    <rdf:Description rdf:about="https://llvm.org/devmtg/2021-11/slides/2021-CIRCT-LiftingHardwareDevOutOfThe20thCentury.pdf">
+        <z:itemType>document</z:itemType>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Lenharth</foaf:surname>
+                        <foaf:givenName>Andrew</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Lattner</foaf:surname>
+                        <foaf:givenName>Chris</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:title>CIRCT: Lifting hardware development out of the 20th century</dc:title>
+        <dc:date>2021-11-17</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>https://llvm.org/devmtg/2021-11/slides/2021-CIRCT-LiftingHardwareDevOutOfThe20thCentury.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+    </rdf:Description>
+    <rdf:Description rdf:about="https://www.cs.unb.ca/tech-reports/honours-theses/Matthew.Gordon-4997.pdf">
+        <z:itemType>document</z:itemType>
+        <bib:authors>
+            <rdf:Seq>
+                <rdf:li>
+                    <foaf:Person>
+                        <foaf:surname>Gordon</foaf:surname>
+                        <foaf:givenName>Matthew</foaf:givenName>
+                    </foaf:Person>
+                </rdf:li>
+            </rdf:Seq>
+        </bib:authors>
+        <dc:title>μ: A Functional Programming Language for Digital Signal Processing</dc:title>
+        <dc:date>2003-04-09</dc:date>
+        <dc:identifier>
+            <dcterms:URI>
+                <rdf:value>https://www.cs.unb.ca/tech-reports/honours-theses/Matthew.Gordon-4997.pdf</rdf:value>
+            </dcterms:URI>
+        </dc:identifier>
+    </rdf:Description>
 </rdf:RDF>
